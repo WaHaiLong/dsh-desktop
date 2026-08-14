@@ -22,10 +22,11 @@ Built-in support for connecting [kingdee-mcp](https://github.com/WaHaiLong/Kingd
 Menu **设置 → 金蝶 MCP 设置** opens a form for the 4 connection params
 (`KINGDEE_SERVER_URL` 须含 `/k3cloud/`、`KINGDEE_ACCT_ID`、`KINGDEE_USERNAME`、`KINGDEE_PASSWORD`).
 On save, the app writes an `mcp-client` entry as a `--patch` overlay into dsh and restarts the
-server; dsh then spawns the kingdee-mcp server via `uvx kingdee-mcp`.
+server; dsh then spawns the kingdee-mcp server via the **bundled `uv` binary**
+(`uv tool run kingdee-mcp`).
 
-Requires [`uv`](https://docs.astral.sh/uv/) (`brew install uv` / `pip install uv`); the first run
-auto-downloads Python + kingdee-mcp into uv's cache.
+`uv` is bundled into the app (no manual install). The first run auto-downloads Python +
+kingdee-mcp into uv's cache.
 
 ## Build
 

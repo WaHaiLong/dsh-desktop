@@ -11,7 +11,7 @@
     "fetch:uv": "node scripts/fetch-uv.mjs",
     "runtime:install": "npm install --prefix resources/dsh",
     "build": "npm run fetch:node && npm run fetch:uv && npm run runtime:install && npm run dist",
-    "dist": "electron-builder",
+    "dist": "electron-builder --publish never",
     "start": "electron ."
   },
   "devDependencies": {
