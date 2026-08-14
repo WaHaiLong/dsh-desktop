@@ -6,7 +6,7 @@
 // Set UV_VERSION to pin a release (default 0.12.3). Set UV_MIRROR to override the
 // download base URL (e.g. a GitHub proxy).
 import { execFileSync } from 'node:child_process';
-import { createWriteStream, existsSync, mkdirSync, mkdtempSync, rmSync, copyFileSync } from 'node:fs';
+import { createWriteStream, existsSync, mkdirSync, mkdtempSync, rmSync, copyFileSync, renameSync, chmodSync } from 'node:fs';
 import { pipeline } from 'node:stream/promises';
 import { Readable } from 'node:stream';
 import { tmpdir } from 'node:os';
@@ -51,7 +51,7 @@ async function main() {
   if (process.env.UV_LOCAL) {
     if (!existsSync(process.env.UV_LOCAL)) throw new Error(`UV_LOCAL not found: ${process.env.UV_LOCAL}`);
     copyFileSync(process.env.UV_LOCAL, finalBin);
-    execFileSync('chmod', ['+x', finalBin]);
+    chmodSync(finalBin, 0o755);
     console.log(`Copied uv from ${process.env.UV_LOCAL} → ${finalBin}`);
     return;
   }
@@ -70,12 +70,17 @@ async function main() {
   console.log(`Extracting to ${tmp} …`);
   execFileSync('tar', ['-xf', archive, '-C', tmp], { stdio: 'inherit' });
 
-  const srcBin = path.join(tmp, dirname, binName);
+  // Unix tarballs contain a `uv-<triple>/` directory wrapper; the Windows zip
+  // drops uv.exe at the archive root. Locate the binary either way.
+  const srcBin = isWin
+    ? path.join(tmp, binName)
+    : path.join(tmp, dirname, binName);
   if (!existsSync(srcBin)) throw new Error(`uv binary not found at ${srcBin}`);
 
   rmSync(dest, { recursive: true, force: true });
   mkdirSync(dest, { recursive: true });
-  execFileSync('mv', [srcBin, finalBin], { stdio: 'inherit' });
+  renameSync(srcBin, finalBin);
+  if (!isWin) chmodSync(finalBin, 0o755);
   rmSync(tmp, { recursive: true, force: true });
   console.log(`Installed uv ${VERSION} → ${finalBin}`);
 }
