@@ -1,5 +1,7 @@
 # DeepSeek Harness Desktop
 
+> **中文** · [简体中文](README.zh-CN.md)
+
 Cross-platform desktop app for [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) (`dsh`).
 
 It wraps the `dsh web` UI in an Electron shell and bundles a **standalone Node.js runtime** to run the
