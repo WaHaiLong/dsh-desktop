@@ -41,7 +41,7 @@
       "artifactName": "DeepSeekHarness-${version}-${arch}.${ext}"
     },
     "win": {
-      "target": ["nsis"],
+      "target": ["nsis", "zip"],
       "artifactName": "DeepSeekHarness-${version}-${arch}.${ext}"
     },
     "nsis": {
