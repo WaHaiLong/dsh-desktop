@@ -6,7 +6,7 @@
 // Set UV_VERSION to pin a release (default 0.12.3). Set UV_MIRROR to override the
 // download base URL (e.g. a GitHub proxy).
 import { execFileSync } from 'node:child_process';
-import { createWriteStream, existsSync, mkdirSync, mkdtempSync, rmSync, copyFileSync, renameSync, chmodSync } from 'node:fs';
+import { createWriteStream, existsSync, mkdirSync, mkdtempSync, rmSync, copyFileSync, chmodSync } from 'node:fs';
 import { pipeline } from 'node:stream/promises';
 import { Readable } from 'node:stream';
 import { tmpdir } from 'node:os';
@@ -79,7 +79,9 @@ async function main() {
 
   rmSync(dest, { recursive: true, force: true });
   mkdirSync(dest, { recursive: true });
-  renameSync(srcBin, finalBin);
+  // fs.rename fails cross-device on Windows (tmp on C:, workspace on D:),
+  // so copy and let the tmp cleanup below discard the source.
+  copyFileSync(srcBin, finalBin);
   if (!isWin) chmodSync(finalBin, 0o755);
   rmSync(tmp, { recursive: true, force: true });
   console.log(`Installed uv ${VERSION} → ${finalBin}`);
