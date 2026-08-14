@@ -1,5 +1,7 @@
 # DeepSeek Harness Desktop
 
+**🌐 官网:** <https://wahailong.github.io/dsh-desktop> · 下载安装包、查看教程。
+
 点击下方语言块标题,在 **简体中文 / English** 之间切换。
 
 <details open>

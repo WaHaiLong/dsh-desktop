@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>技术栈 — DeepSeek Harness Desktop</title>
+  <meta name="description" content="DeepSeek Harness Desktop 技术栈介绍:每项技术是什么、发展历史、为什么选它。">
+  <link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+
+<nav class="nav">
+  <div class="nav-inner">
+    <a class="brand" href="index.html"><span class="brand-logo">🧭</span> DeepSeek Harness Desktop</a>
+    <div class="nav-links">
+      <a href="index.html">首页</a>
+      <a href="tutorial.html">教程</a>
+      <a href="tech.html" class="active">技术栈</a>
+      <a class="btn" href="https://github.com/WaHaiLong/dsh-desktop/releases/latest">立即下载</a>
+    </div>
+  </div>
+</nav>
+
+<header class="hero" style="padding: 56px 0 32px;">
+  <div class="container">
+    <h1 style="font-size: clamp(28px, 4vw, 40px);">技术栈介绍与历史</h1>
+    <p class="sub" style="font-size: 16px;">每项技术:是什么 · 发展历史 · 为什么选它。</p>
+  </div>
+</header>
+
+<section class="section">
+  <div class="container prose">
+    <table>
+      <thead><tr><th>技术</th><th>在本项目中的角色</th><th>诞生时间</th></tr></thead>
+      <tbody>
+        <tr><td>Node.js</td><td>捆绑的独立运行时,驱动整个 harness</td><td>2009</td></tr>
+        <tr><td>Electron</td><td>桌面壳,包装 <code>dsh web</code> UI</td><td>2013</td></tr>
+        <tr><td>DeepSeek Harness (<code>dsh</code>)</td><td>核心 Agent 运行时</td><td>2026.08</td></tr>
+        <tr><td>MCP(模型上下文协议)</td><td>连接 AI 与外部系统的开放标准</td><td>2024.11</td></tr>
+        <tr><td>kingdee-mcp</td><td>金蝶云星空 MCP 服务器</td><td>2026</td></tr>
+        <tr><td>uv</td><td>Python 环境/依赖管理器,零依赖启动 kingdee-mcp</td><td>2024.02</td></tr>
+        <tr><td>Python</td><td>kingdee-mcp 的运行语言</td><td>1991</td></tr>
+        <tr><td>electron-builder</td><td>跨平台安装包打包</td><td>2016</td></tr>
+        <tr><td>GitHub Actions</td><td>三平台 CI/CD 自动构建</td><td>2018</td></tr>
+        <tr><td>npm</td><td>JS 依赖管理</td><td>2010</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<section class="section section-alt">
+  <div class="container prose">
+    <h2>Node.js</h2>
+    <p>开源的 JavaScript 运行时,把 Google 的 V8 引擎搬到服务端,事件驱动、非阻塞 I/O。<b>发展历史</b>:2009 年由 Ryan Dahl 发布;2010 年引入 npm;2015 年进入语义化版本并成立 Node.js Foundation;2019 年并入 OpenJS Foundation,沿用至今。<b>为什么用它</b>:<code>dsh</code> 本身是 TypeScript/Node.js 写的,桌面 App 直接捆绑独立 Node,用户无需安装,原生模块以正确 ABI 加载。</p>
+
+    <h2>Electron</h2>
+    <p>用 Chromium + Node.js 开发跨平台桌面应用的框架。<b>发展历史</b>:2013 年 GitHub 为编辑器 Atom 开发并开源;2016 年发布 1.0,VS Code、Slack、Discord 都基于它;2019 年移交 OpenJS Foundation。<b>为什么用它</b>:<code>dsh</code> 的界面是 Web UI,一套前端代码三平台打包;且 Electron 自带 Node,契合"捆绑运行时"的思路。</p>
+
+    <h2>DeepSeek Harness (<code>dsh</code>)</h2>
+    <p>DeepSeek AI 开源的 Agent 运行时,理念是"模型 + harness = Agent",核心设计是<b>一切皆插件</b>——没有特权核心,模型适配器、工具、会话日志、Agent 循环、甚至整个 Web UI 都可插拔。<b>发展历史</b>:TypeScript/Node.js 编写,底层基于 Cordis 微内核;2026 年 8 月发布 v0.1 开发者预览版,MIT 开源,首日约 2.8 万 star,数天内涨到 5 万+。<b>为什么用它</b>:本项目就是 <code>dsh</code> 的桌面壳,它代表当下最前沿的 Agent 运行时设计。</p>
+
+    <h2>MCP(模型上下文协议)</h2>
+    <p>连接 AI 与外部工具/数据的开放标准,解决"每个工具一套集成"的 N×M 问题,被称为<b>"AI 应用的 USB-C"</b>。<b>发展历史</b>:2024 年 11 月 25 日由 Anthropic 开源(规范 + SDK + Claude Desktop 支持);首日采用者包括 Block、Replit、Sourcegraph 等;2025 年 OpenAI、微软、Google 相继接入,MCP 交由 Linux Foundation 托管,成为跨厂商标准。<b>为什么用它</b>:AI 要操作金蝶 ERP 需要标准化连接方式,MCP 是当前唯一被全行业采纳的 Agent 工具协议,<code>dsh</code> 原生支持。</p>
+
+    <h2>kingdee-mcp</h2>
+    <p>为金蝶云星空(Kingdee Cloud Star)写的 MCP 服务器,把金蝶 ERP 单据以工具形式暴露给 AI。<b>发展历史</b>:金蝶国际 1993 年创立于深圳,云星空是其旗舰云 ERP;本项目内置的 <code>kingdee-mcp</code> 把金蝶 WebAPI 封装成 MCP Server。<b>为什么用它</b>:目标用户是使用金蝶 ERP 的企业,让 AI 用自然语言查单、改单是最直观的落地场景。</p>
+
+    <h2>uv</h2>
+    <p>Astral(也是 Ruff 作者)出品的超快 Python 包与环境管理器,<b>Rust 编写</b>,号称"Python 的 Cargo",一个工具替代 pip、Poetry、pyenv 等一揽子。<b>发展历史</b>:2024 年 2 月发布,比 pip 快 10–100 倍;2024 年 8 月扩展为端到端方案(项目/工具/脚本/Python 本体);2025 年成为 Python 工具链事实标准。<b>为什么用它</b>:kingdee-mcp 是 Python 写的,把 uv 捆绑进 App,用户零安装即可拉起;首次运行自动下载缓存,后续即开即用。</p>
+
+    <h2>Python / electron-builder / GitHub Actions / npm</h2>
+    <p><b>Python</b>(1991, Guido van Rossum):kingdee-mcp 的实现语言,由 uv 按需下载。<b>electron-builder</b>(2016):一个配置覆盖三平台安装包(macOS dmg/zip、Windows NSIS、Linux AppImage/deb)。<b>GitHub Actions</b>(2018):matrix 一份配置同时跑三平台构建,产物上传为 Artifacts。<b>npm</b>(2010):Electron、electron-builder、<code>@deepseek-ai/dsh</code> 的依赖管理。</p>
+  </div>
+</section>
+
+<section class="section">
+  <div class="container prose">
+    <h2>为什么用这一整套</h2>
+    <p>一句话:<b>给 <code>dsh</code> 一个"零门槛、跨平台、能连金蝶"的桌面壳</b>。</p>
+    <ol>
+      <li><b>壳</b> —— Electron:UI 是 Web,三平台复用一套代码。</li>
+      <li><b>运行时</b> —— 捆绑 Node + uv,用户机器零安装、零配置。</li>
+      <li><b>智能核心</b> —— dsh:当前最前沿的开源 Agent 运行时,插件化设计。</li>
+      <li><b>连接业务</b> —— 通过 MCP 标准协议接 kingdee-mcp,操作金蝶 ERP。</li>
+      <li><b>交付</b> —— electron-builder + GitHub Actions 自动出三平台安装包。</li>
+    </ol>
+    <p>每个环节都选当时最主流、生态最成熟的方案,组合起来就是:<b>下载一个 App,打开,直接让 AI 帮你操作金蝶。</b></p>
+  </div>
+</section>
+
+<footer class="footer">
+  <div class="container">
+    <p>DeepSeek Harness Desktop · <a href="https://github.com/WaHaiLong/dsh-desktop" target="_blank">GitHub 仓库</a> · <a href="https://github.com/WaHaiLong/dsh-desktop/wiki" target="_blank">Wiki</a> · MIT License</p>
+  </div>
+</footer>
+
+</body>
+</html>

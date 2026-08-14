@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>教程 — DeepSeek Harness Desktop</title>
+  <meta name="description" content="DeepSeek Harness Desktop 使用教程:快速开始、金蝶 MCP 配置、构建与发布、常见问题。">
+  <link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+
+<nav class="nav">
+  <div class="nav-inner">
+    <a class="brand" href="index.html"><span class="brand-logo">🧭</span> DeepSeek Harness Desktop</a>
+    <div class="nav-links">
+      <a href="index.html">首页</a>
+      <a href="tutorial.html" class="active">教程</a>
+      <a href="tech.html">技术栈</a>
+      <a class="btn" href="https://github.com/WaHaiLong/dsh-desktop/releases/latest">立即下载</a>
+    </div>
+  </div>
+</nav>
+
+<header class="hero" style="padding: 56px 0 32px;">
+  <div class="container">
+    <h1 style="font-size: clamp(28px, 4vw, 40px);">使用教程</h1>
+    <p class="sub" style="font-size: 16px;">从安装到连上金蝶,一步步来。</p>
+  </div>
+</header>
+
+<section class="section section-alt" id="quickstart">
+  <div class="container prose">
+    <h2>快速开始</h2>
+    <ol>
+      <li>从<a href="index.html#download">官网下载</a>或<a href="https://github.com/WaHaiLong/dsh-desktop/releases/latest" target="_blank">Releases</a>获取对应平台的安装包。</li>
+      <li>安装并启动应用。</li>
+      <li>打开 <b>设置 → 金蝶 MCP 设置</b> 填入连接参数。</li>
+      <li>用自然语言提问,开始操作金蝶 ERP 单据。</li>
+    </ol>
+    <p>应用打包了独立的 Node.js 运行时,<b>不需要在系统里安装 Node.js 或 Python</b>;金蝶 MCP 所需的 Python 与 kingdee-mcp 由内置 uv 在首次运行时自动下载。</p>
+  </div>
+</section>
+
+<section class="section" id="kingdee">
+  <div class="container prose">
+    <h2>金蝶 MCP 配置指南</h2>
+    <p>内置对接 <a href="https://github.com/WaHaiLong/KingdeeMCP" target="_blank">kingdee-mcp</a>——一个金蝶云星空 MCP 服务器,让 AI 用自然语言查询/操作金蝶 ERP 单据(采购/销售/库存/生产/成本/固定资产)。</p>
+
+    <h3>配置界面</h3>
+    <p>菜单 <b>设置 → 金蝶 MCP 设置</b>,填写 4 个连接参数:</p>
+    <table>
+      <thead><tr><th>参数</th><th>说明</th></tr></thead>
+      <tbody>
+        <tr><td><code>KINGDEE_SERVER_URL</code></td><td>金蝶云星空 WebAPI 地址,<b>必须包含 <code>/k3cloud/</code></b>,如 <code>https://your-server/k3cloud/</code></td></tr>
+        <tr><td><code>KINGDEE_ACCT_ID</code></td><td>账套 ID</td></tr>
+        <tr><td><code>KINGDEE_USERNAME</code></td><td>登录用户名</td></tr>
+        <tr><td><code>KINGDEE_PASSWORD</code></td><td>登录密码</td></tr>
+      </tbody>
+    </table>
+
+    <h3>保存后的行为</h3>
+    <ol>
+      <li>应用以 <code>--patch</code> 覆盖层把 <code>mcp-client</code> 配置写入 dsh,并重启服务器。</li>
+      <li>dsh 通过捆绑的 uv 二进制启动 kingdee-mcp(<code>uv tool run kingdee-mcp</code>)。</li>
+      <li>首次运行自动下载 Python + kingdee-mcp 到 uv 缓存。</li>
+    </ol>
+
+    <h3>常见问题</h3>
+    <p><b>首次连接慢 / Python 下载失败?</b><br>
+    uv 捆绑在应用内,但 Python 和 kingdee-mcp 首次运行才下载。网络受限时可更换网络重试,或在有 uv 的机器上先执行 <code>uv tool run kingdee-mcp</code> 预热。</p>
+    <p><b>提示服务器地址无效?</b><br>
+    确认 <code>KINGDEE_SERVER_URL</code> 以 <code>/k3cloud/</code> 结尾,且本机可访问该地址。</p>
+    <p><b>不想用金蝶 MCP?</b><br>
+    不保存配置即可,dsh 本身可独立使用。</p>
+  </div>
+</section>
+
+<section class="section section-alt" id="build">
+  <div class="container prose">
+    <h2>构建与发布</h2>
+    <h3>本地构建</h3>
+    <p>只需要构建机器上装有 Node.js(任意较新版本)。</p>
+<pre>npm install                 # 应用 devDeps(electron、electron-builder)
+npm run fetch:node          # 为当前平台下载独立 Node → resources/node/
+npm run runtime:install     # 安装 @deepseek-ai/dsh → resources/dsh/node_modules/
+npm run dist                # 在 dist/ 下生成安装包
+# 或一键执行:npm run build</pre>
+    <p><b>注意</b>:每个平台要在对应平台上构建——捆绑的独立 Node 二进制是分系统的。</p>
+
+    <h3>CI 自动构建</h3>
+    <p><code>.github/workflows/release.yml</code> 自动完成跨平台构建:推送 <code>v*</code> 标签或手动触发 workflow,三平台并行(macOS / Ubuntu / Windows),产物上传为 Actions Artifacts。</p>
+
+    <h3>发布流程</h3>
+<pre>git tag v0.x.x
+git push origin v0.x.x    # 触发 release workflow</pre>
+    <p>CI 跑完后,把 Actions Artifacts 下载下来上传到 <a href="https://github.com/WaHaiLong/dsh-desktop/releases" target="_blank">GitHub Releases</a> 页面,官网下载按钮自动指向最新版本。</p>
+  </div>
+</section>
+
+<footer class="footer">
+  <div class="container">
+    <p>DeepSeek Harness Desktop · <a href="https://github.com/WaHaiLong/dsh-desktop" target="_blank">GitHub 仓库</a> · <a href="https://github.com/WaHaiLong/dsh-desktop/wiki" target="_blank">Wiki</a> · MIT License</p>
+  </div>
+</footer>
+
+</body>
+</html>
