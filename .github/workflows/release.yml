@@ -33,6 +33,9 @@ jobs:
       - name: Fetch standalone Node
         run: npm run fetch:node
 
+      - name: Fetch uv
+        run: npm run fetch:uv
+
       - name: Build installers
         run: npm run dist
 

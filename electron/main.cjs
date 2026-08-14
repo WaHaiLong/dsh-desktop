@@ -91,14 +91,21 @@ function saveSettings(settings) {
   fs.writeFileSync(SETTINGS_FILE(), JSON.stringify({ ...DEFAULT_SETTINGS, ...settings }, null, 2));
 }
 
-function findUvx() {
+function bundledUvPath() {
+  return path.join(resourcesRoot(), 'uv', process.platform === 'win32' ? 'uv.exe' : 'uv');
+}
+
+/** Resolve the uv binary: bundled copy first, then system uv. */
+function findUv() {
+  const bundled = bundledUvPath();
+  if (fs.existsSync(bundled)) return bundled;
   const cmd = process.platform === 'win32' ? 'where' : 'which';
   try {
-    const r = spawnSync(cmd, ['uvx'], { encoding: 'utf8' });
+    const r = spawnSync(cmd, ['uv'], { encoding: 'utf8' });
     const first = (r.stdout || '').split(/\r?\n/).map((s) => s.trim()).find(Boolean);
     if (first) return first;
   } catch (_) { /* ignore */ }
-  return 'uvx';
+  return 'uv';
 }
 
 /** Write/remove the --patch overlay that wires kingdee-mcp into dsh. */
@@ -107,7 +114,7 @@ function writeKingdeePatch(settings) {
     try { fs.rmSync(KINGDEE_PATCH_FILE(), { force: true }); } catch (_) { /* ignore */ }
     return;
   }
-  const uvx = findUvx();
+  const uv = findUv();
   const env = {
     KINGDEE_SERVER_URL: settings.serverUrl || '',
     KINGDEE_ACCT_ID: settings.acctId || '',
@@ -121,8 +128,8 @@ function writeKingdeePatch(settings) {
     '      config:',
     '        transport: stdio',
     '        serverName: kingdee',
-    `        command: ${JSON.stringify(uvx)}`,
-    `        args: ${JSON.stringify(['kingdee-mcp'])}`,
+    `        command: ${JSON.stringify(uv)}`,
+    `        args: ${JSON.stringify(['tool', 'run', 'kingdee-mcp'])}`,
     '        env:',
   ];
   for (const [k, v] of Object.entries(env)) lines.push(`          ${k}: ${JSON.stringify(v)}`);
@@ -298,7 +305,7 @@ ipcMain.handle('kingdee:save-settings', (_e, settings) => {
   restartServer();
   return true;
 });
-ipcMain.handle('kingdee:get-status', () => ({ uvx: findUvx() !== 'uvx' }));
+ipcMain.handle('kingdee:get-status', () => ({ uvx: findUv() !== 'uv' }));
 
 // ---------------------------------------------------------------------------
 // App lifecycle

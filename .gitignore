@@ -1,6 +1,7 @@
 node_modules/
 resources/dsh/node_modules/
 resources/node/
+resources/uv/
 dist/
 *.log
 .DS_Store
