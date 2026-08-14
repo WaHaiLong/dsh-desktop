@@ -1,0 +1,114 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>金蝶 MCP 设置</title>
+<style>
+  :root { --bg:#0e1117; --panel:#161b22; --border:#2d333b; --fg:#e6edf3; --muted:#8b949e; --accent:#4d6bfe; --err:#f47067; }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--fg); font:14px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"PingFang SC","Microsoft YaHei",sans-serif; }
+  .wrap { max-width:560px; margin:0 auto; padding:28px 24px 40px; }
+  h1 { font-size:18px; margin:0 0 4px; }
+  .sub { color:var(--muted); font-size:12px; margin:0 0 20px; }
+  .field { margin-bottom:14px; }
+  label { display:block; font-size:13px; margin-bottom:6px; color:var(--fg); }
+  input[type=text], input[type=password] {
+    width:100%; padding:9px 12px; background:#0a0d12; border:1px solid var(--border);
+    border-radius:8px; color:var(--fg); font-size:14px;
+  }
+  input:focus { outline:none; border-color:var(--accent); }
+  .hint { color:var(--muted); font-size:11px; margin-top:4px; }
+  .toggle { display:flex; align-items:center; gap:8px; margin:18px 0; cursor:pointer; }
+  .toggle input { width:16px; height:16px; }
+  .row { display:flex; gap:10px; align-items:center; margin-top:20px; }
+  button {
+    padding:9px 18px; border:none; border-radius:8px; font-size:14px; cursor:pointer;
+  }
+  .save { background:var(--accent); color:#fff; font-weight:600; }
+  .save:hover { filter:brightness(1.1); }
+  .cancel { background:var(--panel); color:var(--fg); border:1px solid var(--border); }
+  .status { font-size:12px; color:var(--muted); margin-left:auto; text-align:right; }
+  .status.ok { color:#3fb950; }
+  .status.err { color:var(--err); }
+  .note { margin-top:18px; padding:10px 12px; background:var(--panel); border:1px solid var(--border); border-radius:8px; font-size:12px; color:var(--muted); }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>金蝶 MCP 设置</h1>
+  <p class="sub">接入金蝶云星空 MCP Server（kingdee-mcp），让 DeepSeek Harness 用自然语言查询/操作金蝶 ERP 单据。</p>
+
+  <div class="field">
+    <label>金蝶服务器地址（须含 /k3cloud/ 后缀）</label>
+    <input type="text" id="serverUrl" placeholder="http://your-server/k3cloud/" />
+  </div>
+  <div class="field">
+    <label>账套 ID</label>
+    <input type="text" id="acctId" />
+  </div>
+  <div class="field">
+    <label>金蝶账号（建议专用集成账号，勿用 Administrator）</label>
+    <input type="text" id="username" />
+  </div>
+  <div class="field">
+    <label>密码</label>
+    <input type="password" id="password" />
+  </div>
+
+  <label class="toggle">
+    <input type="checkbox" id="enabled" />
+    <span>启用金蝶 MCP（保存后自动重启服务）</span>
+  </label>
+
+  <div class="row">
+    <button class="save" id="saveBtn">保存</button>
+    <button class="cancel" id="cancelBtn">取消</button>
+    <span class="status" id="status"></span>
+  </div>
+
+  <div class="note" id="note"></div>
+</div>
+
+<script>
+  const $ = (id) => document.getElementById(id);
+  let uvxFound = false;
+
+  async function load() {
+    const s = await window.kingdee.getSettings();
+    $('serverUrl').value = s.serverUrl || '';
+    $('acctId').value = s.acctId || '';
+    $('username').value = s.username || '';
+    $('password').value = s.password || '';
+    $('enabled').checked = !!s.enabled;
+    const st = await window.kingdee.getStatus();
+    uvxFound = st.uvx;
+    $('note').innerHTML = uvxFound
+      ? '✅ 已检测到 <code>uvx</code>（用于运行 kingdee-mcp）。保存后会自动重启服务并接入金蝶。'
+      : '⚠️ 未检测到 <code>uvx</code>。请先安装 uv：<code>brew install uv</code> 或 <code>pip install uv</code>，然后重新保存。';
+  }
+
+  $('saveBtn').addEventListener('click', async () => {
+    const settings = {
+      enabled: $('enabled').checked,
+      serverUrl: $('serverUrl').value.trim(),
+      acctId: $('acctId').value.trim(),
+      username: $('username').value.trim(),
+      password: $('password').value,
+    };
+    const ok = await window.kingdee.saveSettings(settings);
+    const st = $('status');
+    if (ok) {
+      st.textContent = '已保存，服务重启中…';
+      st.className = 'status ok';
+      setTimeout(() => window.close(), 1200);
+    } else {
+      st.textContent = '保存失败';
+      st.className = 'status err';
+    }
+  });
+
+  $('cancelBtn').addEventListener('click', () => window.close());
+  load();
+</script>
+</body>
+</html>

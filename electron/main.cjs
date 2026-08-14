@@ -1,20 +1,23 @@
 'use strict';
 
-const { app, BrowserWindow, shell } = require('electron');
-const { spawn } = require('node:child_process');
+const { app, BrowserWindow, shell, Menu, ipcMain } = require('electron');
+const { spawn, spawnSync } = require('node:child_process');
 const path = require('node:path');
 const fs = require('node:fs');
 
 const HOST = '127.0.0.1';
+const SETTINGS_FILE = () => path.join(app.getPath('userData'), 'kingdee-settings.json');
+const KINGDEE_PATCH_FILE = () => path.join(app.getPath('userData'), 'kingdee-mcp.patch.yml');
 
 let serverProc = null;
 let mainWindow = null;
+let settingsWindow = null;
 let readyPort = null;
 let logStream = null;
 
-/** Root that holds `node/` and `dsh/` — dev: project root; packaged: resourcesPath. */
+/** Root that holds `node/` and `dsh/` — dev: project `resources/`; packaged: resourcesPath. */
 function resourcesRoot() {
-  return app.isPackaged ? process.resourcesPath : path.join(__dirname, '..');
+  return app.isPackaged ? process.resourcesPath : path.join(__dirname, '..', 'resources');
 }
 
 function nodeBinPath() {
@@ -22,10 +25,7 @@ function nodeBinPath() {
 }
 
 function dshBinPath() {
-  return path.join(
-    resourcesRoot(),
-    'dsh', 'node_modules', '@deepseek-ai', 'dsh', 'lib', 'bin.js'
-  );
+  return path.join(resourcesRoot(), 'dsh', 'node_modules', '@deepseek-ai', 'dsh', 'lib', 'bin.js');
 }
 
 function logDir() {
@@ -41,9 +41,12 @@ function ensureLogStream() {
 }
 
 function logLine(prefix, text) {
-  const stream = ensureLogStream();
   const line = `[${new Date().toISOString()}] ${prefix} ${text}`;
-  stream.write(line.endsWith('\n') ? line : line + '\n');
+  ensureLogStream().write(line.endsWith('\n') ? line : line + '\n');
+}
+
+function escapeHtml(s) {
+  return String(s).replace(/[<>&]/g, (c) => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;' }[c]));
 }
 
 function showError(message) {
@@ -51,12 +54,11 @@ function showError(message) {
   const html = `<!doctype html><html><head><meta charset="utf-8"><title>DeepSeek Harness</title>
 <style>body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
 background:#0e1117;color:#e6edf3;display:flex;align-items:center;justify-content:center;height:100vh}
-.box{max-width:620px;padding:32px;text-align:center}h1{font-size:20px;margin-bottom:16px}
+.box{max-width:640px;padding:32px;text-align:center}h1{font-size:20px;margin-bottom:16px}
 pre{background:#161b22;padding:16px;border-radius:8px;text-align:left;white-space:pre-wrap;word-break:break-word;
 font-size:13px;color:#f47067}</style></head><body><div class="box"><h1>DeepSeek Harness failed to start</h1>
-<pre>${String(message).replace(/[<>&]/g, (c) => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;' }[c]))}</pre>
-<p>Log: ${logDir().replace(/[<>&]/g, (c) => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;' }[c]))}/dsh-server.log</p>
-</div></body></html>`;
+<pre>${escapeHtml(message)}</pre>
+<p>Log: ${escapeHtml(logDir())}/dsh-server.log</p></div></body></html>`;
   mainWindow.loadURL('data:text/html;charset=utf-8,' + encodeURIComponent(html));
 }
 
@@ -65,26 +67,98 @@ function loadApp() {
   mainWindow.loadURL(`http://${HOST}:${readyPort}/`);
 }
 
+function showSplash() {
+  if (mainWindow) mainWindow.loadFile(path.join(__dirname, 'splash.html'));
+}
+
+// ---------------------------------------------------------------------------
+// Kingdee MCP settings
+// ---------------------------------------------------------------------------
+
+const DEFAULT_SETTINGS = { enabled: false, serverUrl: '', acctId: '', username: '', password: '' };
+
+function loadSettings() {
+  try {
+    const raw = fs.readFileSync(SETTINGS_FILE(), 'utf8');
+    return { ...DEFAULT_SETTINGS, ...JSON.parse(raw) };
+  } catch (_) {
+    return { ...DEFAULT_SETTINGS };
+  }
+}
+
+function saveSettings(settings) {
+  fs.mkdirSync(app.getPath('userData'), { recursive: true });
+  fs.writeFileSync(SETTINGS_FILE(), JSON.stringify({ ...DEFAULT_SETTINGS, ...settings }, null, 2));
+}
+
+function findUvx() {
+  const cmd = process.platform === 'win32' ? 'where' : 'which';
+  try {
+    const r = spawnSync(cmd, ['uvx'], { encoding: 'utf8' });
+    const first = (r.stdout || '').split(/\r?\n/).map((s) => s.trim()).find(Boolean);
+    if (first) return first;
+  } catch (_) { /* ignore */ }
+  return 'uvx';
+}
+
+/** Write/remove the --patch overlay that wires kingdee-mcp into dsh. */
+function writeKingdeePatch(settings) {
+  if (!settings.enabled) {
+    try { fs.rmSync(KINGDEE_PATCH_FILE(), { force: true }); } catch (_) { /* ignore */ }
+    return;
+  }
+  const uvx = findUvx();
+  const env = {
+    KINGDEE_SERVER_URL: settings.serverUrl || '',
+    KINGDEE_ACCT_ID: settings.acctId || '',
+    KINGDEE_USERNAME: settings.username || '',
+    KINGDEE_PASSWORD: settings.password || '',
+  };
+  const lines = [
+    '- insert:',
+    '    - id: kingdee-mcp',
+    "      name: '@deepseek-ai/dsh-mcp-client'",
+    '      config:',
+    '        transport: stdio',
+    '        serverName: kingdee',
+    `        command: ${JSON.stringify(uvx)}`,
+    `        args: ${JSON.stringify(['kingdee-mcp'])}`,
+    '        env:',
+  ];
+  for (const [k, v] of Object.entries(env)) lines.push(`          ${k}: ${JSON.stringify(v)}`);
+  lines.push(`        cwd: ${JSON.stringify(app.getPath('home'))}`);
+  lines.push('        toolCallTimeoutMs: 120000');
+  lines.push('        failOnStartupError: false');
+
+  fs.mkdirSync(app.getPath('userData'), { recursive: true });
+  fs.writeFileSync(KINGDEE_PATCH_FILE(), lines.join('\n') + '\n');
+}
+
+function buildDshArgs() {
+  const args = ['web', '--host', HOST, '--port', '0'];
+  if (fs.existsSync(KINGDEE_PATCH_FILE())) args.splice(1, 0, '--patch', KINGDEE_PATCH_FILE());
+  return args;
+}
+
+// ---------------------------------------------------------------------------
+// dsh server lifecycle
+// ---------------------------------------------------------------------------
+
 function startServer() {
   const nodeBin = nodeBinPath();
   const dshBin = dshBinPath();
 
-  if (!fs.existsSync(nodeBin)) {
-    showError(`Bundled Node runtime not found at:\n${nodeBin}`);
-    return;
-  }
-  if (!fs.existsSync(dshBin)) {
-    showError(`dsh runtime not found at:\n${dshBin}`);
-    return;
-  }
+  if (!fs.existsSync(nodeBin)) { showError(`Bundled Node runtime not found at:\n${nodeBin}`); return; }
+  if (!fs.existsSync(dshBin)) { showError(`dsh runtime not found at:\n${dshBin}`); return; }
 
   const dshHome = path.join(app.getPath('userData'), 'dsh-home');
   fs.mkdirSync(dshHome, { recursive: true });
 
+  const args = buildDshArgs();
   logLine('spawn', `node=${nodeBin}`);
-  logLine('spawn', `dsh=${dshBin}`);
+  logLine('spawn', `dsh=${dshBin} args=${args.join(' ')}`);
 
-  serverProc = spawn(nodeBin, [dshBin, 'web', '--host', HOST, '--port', '0'], {
+  serverProc = spawn(nodeBin, [dshBin, ...args], {
     env: { ...process.env, DSH_HOME: dshHome, FORCE_COLOR: '0', NO_COLOR: '1' },
     stdio: ['ignore', 'pipe', 'pipe'],
     windowsHide: true,
@@ -117,10 +191,33 @@ function startServer() {
   serverProc.on('exit', (code, signal) => {
     logLine('exit', `code=${code} signal=${signal}`);
     serverProc = null;
-    if (app.isQuitting) return;
+    if (app.isQuitting || app.isRestarting) return;
     showError(`DeepSeek Harness exited unexpectedly (code ${code}${signal ? `, signal ${signal}` : ''}).`);
   });
 }
+
+function stopServer() {
+  if (serverProc) {
+    try { serverProc.kill('SIGTERM'); } catch (_) { /* ignore */ }
+    serverProc = null;
+  }
+}
+
+function restartServer() {
+  app.isRestarting = true;
+  stopServer();
+  readyPort = null;
+  showSplash();
+  // brief settle so the old child releases the port before the new one boots
+  setTimeout(() => {
+    app.isRestarting = false;
+    startServer();
+  }, 400);
+}
+
+// ---------------------------------------------------------------------------
+// Windows
+// ---------------------------------------------------------------------------
 
 function createWindow() {
   mainWindow = new BrowserWindow({
@@ -131,11 +228,7 @@ function createWindow() {
     title: 'DeepSeek Harness',
     show: false,
     backgroundColor: '#0e1117',
-    webPreferences: {
-      contextIsolation: true,
-      nodeIntegration: false,
-      sandbox: true,
-    },
+    webPreferences: { contextIsolation: true, nodeIntegration: false, sandbox: true },
   });
 
   mainWindow.once('ready-to-show', () => mainWindow.show());
@@ -155,10 +248,64 @@ function createWindow() {
 
   mainWindow.on('closed', () => { mainWindow = null; });
 
-  mainWindow.loadFile(path.join(__dirname, 'splash.html'));
+  showSplash();
 }
 
+function openSettings() {
+  if (settingsWindow) { settingsWindow.focus(); return; }
+  settingsWindow = new BrowserWindow({
+    width: 620,
+    height: 720,
+    title: '金蝶 MCP 设置',
+    resizable: false,
+    backgroundColor: '#0e1117',
+    webPreferences: {
+      contextIsolation: true,
+      nodeIntegration: false,
+      sandbox: true,
+      preload: path.join(__dirname, 'preload.cjs'),
+    },
+  });
+  settingsWindow.loadFile(path.join(__dirname, 'settings.html'));
+  settingsWindow.on('closed', () => { settingsWindow = null; });
+}
+
+function buildMenu() {
+  const template = [
+    ...(process.platform === 'darwin' ? [{ role: 'appMenu' }] : []),
+    {
+      label: '设置',
+      submenu: [
+        { label: '金蝶 MCP 设置', click: () => openSettings() },
+        { type: 'separator' },
+        { role: 'quit', label: '退出' },
+      ],
+    },
+    { role: 'editMenu' },
+    { role: 'windowMenu' },
+  ];
+  Menu.setApplicationMenu(Menu.buildFromTemplate(template));
+}
+
+// ---------------------------------------------------------------------------
+// IPC
+// ---------------------------------------------------------------------------
+
+ipcMain.handle('kingdee:get-settings', () => loadSettings());
+ipcMain.handle('kingdee:save-settings', (_e, settings) => {
+  saveSettings(settings);
+  writeKingdeePatch(loadSettings());
+  restartServer();
+  return true;
+});
+ipcMain.handle('kingdee:get-status', () => ({ uvx: findUvx() !== 'uvx' }));
+
+// ---------------------------------------------------------------------------
+// App lifecycle
+// ---------------------------------------------------------------------------
+
 app.isQuitting = false;
+app.isRestarting = false;
 
 const gotLock = app.requestSingleInstanceLock();
 if (!gotLock) {
@@ -172,6 +319,8 @@ if (!gotLock) {
   });
 
   app.whenReady().then(() => {
+    buildMenu();
+    writeKingdeePatch(loadSettings()); // ensure patch reflects saved settings
     createWindow();
     startServer();
   });
@@ -186,12 +335,8 @@ if (!gotLock) {
   app.on('before-quit', () => { app.isQuitting = true; });
 
   app.on('will-quit', () => {
-    if (serverProc) {
-      try { serverProc.kill('SIGTERM'); } catch (_) { /* ignore */ }
-    }
-    if (logStream) {
-      try { logStream.end(); } catch (_) { /* ignore */ }
-    }
+    stopServer();
+    if (logStream) { try { logStream.end(); } catch (_) { /* ignore */ } }
   });
 
   app.on('window-all-closed', () => { app.quit(); });

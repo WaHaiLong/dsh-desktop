@@ -13,6 +13,20 @@ no local Node.js install required. **Download, launch, use.**
 - `DSH_HOME` is set to the app's per-user data directory, so config/API keys persist there.
 - On quit, the `dsh` child process is terminated.
 
+## 金蝶 MCP 集成 (Kingdee MCP)
+
+Built-in support for connecting [kingdee-mcp](https://github.com/WaHaiLong/KingdeeMCP) — a
+金蝶云星空 (Kingdee Cloud Star) MCP server — so the harness can query/operate Kingdee ERP documents
+(采购/销售/库存/生产/成本/固定资产) in natural language.
+
+Menu **设置 → 金蝶 MCP 设置** opens a form for the 4 connection params
+(`KINGDEE_SERVER_URL` 须含 `/k3cloud/`、`KINGDEE_ACCT_ID`、`KINGDEE_USERNAME`、`KINGDEE_PASSWORD`).
+On save, the app writes an `mcp-client` entry as a `--patch` overlay into dsh and restarts the
+server; dsh then spawns the kingdee-mcp server via `uvx kingdee-mcp`.
+
+Requires [`uv`](https://docs.astral.sh/uv/) (`brew install uv` / `pip install uv`); the first run
+auto-downloads Python + kingdee-mcp into uv's cache.
+
 ## Build
 
 Requires Node.js (any recent version) on the build machine only.
