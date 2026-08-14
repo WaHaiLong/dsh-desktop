@@ -1,0 +1,53 @@
+{
+  "name": "dsh-desktop",
+  "version": "0.1.0",
+  "description": "DeepSeek Harness desktop app — cross-platform wrapper for the dsh web UI",
+  "author": "DeepSeek Harness Desktop",
+  "license": "MIT",
+  "main": "electron/main.cjs",
+  "private": true,
+  "scripts": {
+    "fetch:node": "node scripts/fetch-node.mjs",
+    "runtime:install": "npm install --prefix resources/dsh",
+    "build": "npm run fetch:node && npm run runtime:install && npm run dist",
+    "dist": "electron-builder",
+    "start": "electron ."
+  },
+  "devDependencies": {
+    "electron": "^43.0.0",
+    "electron-builder": "^26.0.0"
+  },
+  "build": {
+    "appId": "com.deepseek.harness.desktop",
+    "productName": "DeepSeek Harness",
+    "asar": true,
+    "npmRebuild": false,
+    "files": [
+      "electron/**/*",
+      "package.json"
+    ],
+    "extraResources": [
+      { "from": "resources/node", "to": "node" },
+      { "from": "resources/dsh/node_modules", "to": "dsh/node_modules" }
+    ],
+    "mac": {
+      "category": "public.app-category.developer-tools",
+      "target": ["dmg", "zip"],
+      "artifactName": "DeepSeekHarness-${version}-${arch}.${ext}"
+    },
+    "win": {
+      "target": ["nsis"],
+      "artifactName": "DeepSeekHarness-${version}-${arch}.${ext}"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "deleteAppDataOnUninstall": false
+    },
+    "linux": {
+      "target": ["AppImage", "deb"],
+      "category": "Development",
+      "artifactName": "DeepSeekHarness-${version}-${arch}.${ext}"
+    }
+  }
+}
