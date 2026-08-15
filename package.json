@@ -39,10 +39,12 @@
     ],
     "mac": {
       "category": "public.app-category.developer-tools",
+      "icon": "build/icon.png",
       "target": ["dmg", "zip"],
       "artifactName": "DeepSeekHarness-mac-${arch}.${ext}"
     },
     "win": {
+      "icon": "build/icon.png",
       "target": ["nsis", "zip"],
       "artifactName": "DeepSeekHarness-windows-${arch}.${ext}"
     },
@@ -52,6 +54,7 @@
       "deleteAppDataOnUninstall": false
     },
     "linux": {
+      "icon": "build/icon.png",
       "target": ["AppImage", "deb"],
       "category": "Development",
       "artifactName": "DeepSeekHarness-linux-${arch}.${ext}"
