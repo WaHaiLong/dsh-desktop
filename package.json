@@ -13,7 +13,9 @@
     "fetch:node": "node scripts/fetch-node.mjs",
     "fetch:uv": "node scripts/fetch-uv.mjs",
     "runtime:install": "npm install --prefix resources/dsh",
-    "build": "npm run fetch:node && npm run fetch:uv && npm run runtime:install && npm run dist",
+    "runtime:patch": "node scripts/patch-runtime.mjs",
+    "runtime:pack": "node scripts/pack-runtime.mjs",
+    "build": "npm run fetch:node && npm run fetch:uv && npm run runtime:install && npm run runtime:patch && npm run runtime:pack && npm run dist",
     "dist": "electron-builder --publish never",
     "start": "electron ."
   },
@@ -32,7 +34,7 @@
     ],
     "extraResources": [
       { "from": "resources/node", "to": "node" },
-      { "from": "resources/dsh/node_modules", "to": "dsh/node_modules" },
+      { "from": "resources/dsh-runtime.tar.gz", "to": "dsh-runtime.tar.gz" },
       { "from": "resources/uv", "to": "uv" }
     ],
     "mac": {

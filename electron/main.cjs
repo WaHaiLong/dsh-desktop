@@ -24,8 +24,57 @@ function nodeBinPath() {
   return path.join(resourcesRoot(), 'node', process.platform === 'win32' ? 'node.exe' : 'node');
 }
 
-function dshBinPath() {
-  return path.join(resourcesRoot(), 'dsh', 'node_modules', '@deepseek-ai', 'dsh', 'lib', 'bin.js');
+function dshBinPath(runtimeNm) {
+  return path.join(runtimeNm, '@deepseek-ai', 'dsh', 'lib', 'bin.js');
+}
+
+/** Bundled single-file runtime archive — shipped instead of the raw 33k-file node_modules. */
+function runtimeArchivePath() {
+  return path.join(resourcesRoot(), 'dsh-runtime.tar.gz');
+}
+
+/**
+ * Resolve the dsh runtime node_modules:
+ *  - dev: the raw tree at resources/dsh/node_modules (npm run runtime:install).
+ *  - packaged: extract the bundled dsh-runtime.tar.gz once to <userData>/dsh-runtime
+ *    (writable even under Program Files), keyed by app version so updates re-extract.
+ * Extraction is synchronous + atomic (temp dir → rename), so a crash mid-extract never
+ * leaves a half-baked runtime behind.
+ */
+function ensureRuntime() {
+  if (!app.isPackaged) {
+    return path.join(__dirname, '..', 'resources', 'dsh', 'node_modules');
+  }
+
+  const archive = runtimeArchivePath();
+  const destDir = path.join(app.getPath('userData'), 'dsh-runtime');
+  const nmDir = path.join(destDir, 'node_modules');
+  const markerFile = path.join(destDir, '.app-version');
+  const version = app.getVersion();
+
+  if (!fs.existsSync(archive)) {
+    throw new Error(`Bundled runtime not found:\n${archive}\n\nThe installer was built without "npm run runtime:pack".`);
+  }
+
+  // Fast path: already extracted for this exact app version.
+  let markerOk = false;
+  try { markerOk = fs.existsSync(nmDir) && fs.readFileSync(markerFile, 'utf8') === version; } catch (_) { /* re-extract */ }
+  if (markerOk) return nmDir;
+
+  const tmp = fs.mkdtempSync(path.join(app.getPath('userData'), 'dsh-runtime-tmp-'));
+  try {
+    const r = spawnSync('tar', ['-xzf', archive, '-C', tmp], { stdio: 'inherit' });
+    if (r.status !== 0) throw new Error(`tar exited ${r.status}`);
+  } catch (e) {
+    fs.rmSync(tmp, { recursive: true, force: true });
+    throw new Error(`Failed to extract bundled runtime:\n${e.message}`);
+  }
+
+  fs.rmSync(destDir, { recursive: true, force: true });
+  fs.renameSync(tmp, destDir);
+  fs.writeFileSync(markerFile, version);
+  logLine('runtime', `extracted to ${destDir}`);
+  return nmDir;
 }
 
 function logDir() {
@@ -153,7 +202,14 @@ function buildDshArgs() {
 
 function startServer() {
   const nodeBin = nodeBinPath();
-  const dshBin = dshBinPath();
+  let runtimeNm;
+  try {
+    runtimeNm = ensureRuntime();   // packaged: extracts bundled runtime on first launch
+  } catch (e) {
+    showError(String((e && e.message) || e));
+    return;
+  }
+  const dshBin = dshBinPath(runtimeNm);
 
   if (!fs.existsSync(nodeBin)) { showError(`Bundled Node runtime not found at:\n${nodeBin}`); return; }
   if (!fs.existsSync(dshBin)) { showError(`dsh runtime not found at:\n${dshBin}`); return; }

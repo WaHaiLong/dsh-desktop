@@ -43,9 +43,12 @@ dsh 通过**捆绑的 `uv` 二进制**启动 kingdee-mcp 服务器(`uv tool run 
 npm install                 # 应用 devDeps(electron、electron-builder)
 npm run fetch:node          # 为当前平台下载独立 Node → resources/node/
 npm run runtime:install     # 安装 @deepseek-ai/dsh → resources/dsh/node_modules/
+npm run runtime:pack        # 把 3.3 万个小文件打成单个 resources/dsh-runtime.tar.gz
 npm run dist                # 在 dist/ 下生成安装包
 # 或一键执行:npm run build
 ```
+
+运行时在安装包内是**单个 tar.gz**(不是 3 万个小文件):Windows 打包因此从 30 分钟降到几分钟,安装包也小很多。应用**首次运行**时自动把它解压到每用户数据目录,之后直接复用。
 
 每个平台要在**对应平台**上构建(独立 Node 二进制是分系统的)。CI 会自动完成这件事 ——
 见 `.github/workflows/release.yml`。
@@ -113,9 +116,12 @@ Requires Node.js (any recent version) on the build machine only.
 npm install                 # app devDeps (electron, electron-builder)
 npm run fetch:node          # download standalone Node for this platform → resources/node/
 npm run runtime:install     # install @deepseek-ai/dsh → resources/dsh/node_modules/
+npm run runtime:pack        # pack the 33k runtime files into a single resources/dsh-runtime.tar.gz
 npm run dist                # build installers into dist/
-# or all three: npm run build
+# or all of them: npm run build
 ```
+
+The runtime ships in the installer as **one tar.gz** (not 33k files): Windows packaging drops from ~30 min to minutes and the installer is much smaller. The app **extracts it to the per-user data dir on first launch**, then reuses it.
 
 Build each platform **on** that platform (the standalone Node binary is per-OS). CI does this
 automatically — see `.github/workflows/release.yml`.

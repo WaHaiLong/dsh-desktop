@@ -21,10 +21,9 @@ jobs:
           - os: ubuntu-latest
             target: --linux
             paths: "dist/*.AppImage dist/*.deb"
-          # Windows zip 用 store 压缩(纯归档不压缩):800MB 全是预编译二进制,
-          # 压无可压,store 只快不亏(几分钟 vs LZMA 1 小时)。
-          # Windows 必须 store(不压缩):7za 压 800MB 要 1 小时+日志崩溃(Invalid string length)。
-          # mac 用系统原生 zip 所以快;Windows 是 7za,除 store 外都慢。
+          # Windows 必须 store(不压缩):7za 压 800MB 要 1 小时+日志崩溃(Invalid string length),
+          # mac 用系统原生 zip 所以快。运行时已由 runtime:pack 打成单个 tar.gz,
+          # 安装包只复制/归档这一个文件,Windows 打包从 30 分钟降到几分钟。
           - os: windows-latest
             target: --win zip --config.compression=store
             paths: "dist/*.zip"
@@ -45,6 +44,14 @@ jobs:
 
       - name: Install dsh runtime
         run: npm run runtime:install
+
+      # 把对话界面文案「探索未至之境」改成「金蝶云星空助手」(覆盖 npm 安装的默认值)。
+      - name: Patch runtime i18n
+        run: npm run runtime:patch
+
+      # 把 3.3 万个小文件打成单个 tar.gz,安装包只复制一个文件(首次运行才解压)。
+      - name: Pack dsh runtime into single archive
+        run: npm run runtime:pack
 
       - name: Fetch standalone Node
         run: npm run fetch:node
@@ -71,7 +78,7 @@ jobs:
           # --clobber 覆盖同名资产,重复运行幂等
           gh release upload "$TAG" ${{ matrix.paths }} --clobber
 
-  # Windows NSIS 安装版:单独 job(约 1 小时,LZMA 压 800MB),独立发布,不阻塞任何人。
+  # Windows NSIS 安装版:单独 job,独立发布,不阻塞任何人。
   nsis:
     runs-on: windows-latest
     env:
@@ -90,6 +97,13 @@ jobs:
 
       - name: Install dsh runtime
         run: npm run runtime:install
+
+      - name: Patch runtime i18n
+        run: npm run runtime:patch
+
+      # 同样打包成单个 tar.gz,NSIS 只需归档一个文件,不再 30 分钟。
+      - name: Pack dsh runtime into single archive
+        run: npm run runtime:pack
 
       - name: Fetch standalone Node
         run: npm run fetch:node

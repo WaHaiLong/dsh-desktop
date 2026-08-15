@@ -110,16 +110,17 @@ await pipeline(Readable.fromWeb(res.body), createWriteStream(archive)); // 流�
 // tar 解出 bin/node,移到 resources/node/ —— 每个平台要在对应平台构建(二进制分系统)
 
 // scripts/fetch-uv.mjs —— 同理下载 uv;支持 UV_MIRROR 走代理、UV_LOCAL 复用本地二进制</code></pre>
-    <p>然后告诉 electron-builder 把这些目录作为<b>额外资源</b>原样放进安装包(<code>extraResources</code>):</p>
-<pre><code>"build": {
+    <p>然后告诉 electron-builder 把这些作为<b>额外资源</b>放进安装包(<code>extraResources</code>)。注意:<b>3 万个小文件的 node_modules 先被打成单个 <code>dsh-runtime.tar.gz</code></b>,安装包只复制这一个文件——Windows 打包因此从 30 分钟降到几分钟(见第 8 节):</p>
+<pre><code>"scripts": { "runtime:pack": "node scripts/pack-runtime.mjs" },
+"build": {
   "files": ["electron/**/*", "package.json"],
   "extraResources": [
-    { "from": "resources/node",          "to": "node" },
-    { "from": "resources/dsh/node_modules", "to": "dsh/node_modules" },
-    { "from": "resources/uv",            "to": "uv" }
+    { "from": "resources/node",                  "to": "node" },
+    { "from": "resources/dsh-runtime.tar.gz",    "to": "dsh-runtime.tar.gz" },
+    { "from": "resources/uv",                    "to": "uv" }
   ]
 }</code></pre>
-    <p><code>files</code> 是打进 <code>app.asar</code> 的<b>代码</b>;<code>extraResources</code> 是<b>原样复制</b>到 <code>resources/</code> 的运行时。这一步就是把那几百 MB、几万个小文件复制一遍 —— 打包最耗时的一步。</p>
+    <p><code>files</code> 是打进 <code>app.asar</code> 的<b>代码</b>;<code>extraResources</code> 是<b>原样复制</b>到 <code>resources/</code> 的运行时。<b>首次运行时</b>,主进程用系统 <code>tar</code> 把 <code>dsh-runtime.tar.gz</code> 解压到每用户数据目录(用户目录可写,装到 Program Files 也能解),之后直接复用——安装包里只有 4 个左右的文件,Windows 打包不再和 3 万个小文件搏斗。</p>
   </div>
 </section>
 

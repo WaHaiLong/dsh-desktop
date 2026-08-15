@@ -5,3 +5,4 @@ resources/uv/
 dist/
 *.log
 .DS_Store
+resources/dsh-runtime.tar.gz
