@@ -8,7 +8,6 @@ on:
 
 permissions:
   contents: write
-  actions: write
 
 jobs:
   build:
@@ -18,17 +17,14 @@ jobs:
         include:
           - os: macos-latest
             target: --mac
-            artifactName: dsh-desktop-macos
             paths: "dist/*.dmg dist/*.zip"
           - os: ubuntu-latest
             target: --linux
-            artifactName: dsh-desktop-ubuntu
             paths: "dist/*.AppImage dist/*.deb"
           # Windows zip 用 store 压缩(纯归档不压缩):800MB 全是预编译二进制,
           # 压无可压,store 只快不亏(几分钟 vs LZMA 1 小时)。
           - os: windows-latest
             target: --win zip --config.compression=store
-            artifactName: dsh-desktop-windows-zip
             paths: "dist/*.zip"
     runs-on: ${{ matrix.os }}
     env:
@@ -56,13 +52,6 @@ jobs:
 
       - name: Build
         run: npx electron-builder ${{ matrix.target }} --publish never
-
-      - name: Upload artifact (safety cache)
-        uses: actions/upload-artifact@v4
-        with:
-          name: ${{ matrix.artifactName }}
-          path: ${{ matrix.paths }}
-          if-no-files-found: error
 
       # 本平台发布:幂等(不存在则建 Release,存在则跳过),并发竞争用重试兜底。
       - name: Publish to release (independent per platform)
@@ -108,13 +97,6 @@ jobs:
 
       - name: Build NSIS installer
         run: npx electron-builder --win nsis --publish never
-
-      - name: Upload NSIS artifact (safety cache)
-        uses: actions/upload-artifact@v4
-        with:
-          name: dsh-desktop-windows-nsis
-          path: dist/*.exe
-          if-no-files-found: error
 
       - name: Publish NSIS exe
         shell: bash
