@@ -1,0 +1,44 @@
+name: assemble-now
+
+# 一次性临时 workflow:不等 Windows,先把已就绪的 mac/Ubuntu 产物组装成 Release。
+# 用后即删。Windows zip / NSIS exe 由主 release.yml 的 assemble/append-nsis 补进。
+on:
+  workflow_dispatch:
+
+jobs:
+  assemble:
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download latest mac/ubuntu artifacts (datacenter-internal, fast)
+        run: |
+          mkdir -p release
+          for NAME in dsh-desktop-macos dsh-desktop-ubuntu; do
+            ID=$(gh api "repos/WaHaiLong/dsh-desktop/actions/artifacts" \
+              --jq "[.artifacts[] | select(.name==\"$NAME\" and (.expired==false)) | .id] | max")
+            echo "downloading $NAME (artifact id=$ID)"
+            curl -sL -H "Authorization: Bearer $GH_TOKEN" \
+              "https://api.github.com/repos/WaHaiLong/dsh-desktop/actions/artifacts/$ID/zip" \
+              -o "release/$NAME.zip"
+            mkdir -p "release/$NAME"
+            unzip -q "release/$NAME.zip" -d "release/$NAME"
+            rm -f "release/$NAME.zip"
+          done
+          echo "=== assets ==="
+          find release -type f -exec ls -lh {} \;
+
+      - name: Create/update release with mac/ubuntu
+        shell: bash
+        run: |
+          TAG="v$(node -p 'require("./package.json").version')"
+          set -e
+          if ! gh release view "$TAG" >/dev/null 2>&1; then
+            gh release create "$TAG" \
+              --title "DeepSeek Harness Desktop $TAG" \
+              --notes "跨平台 · 零依赖 · 下载即用。捆绑独立 Node.js 运行时与 uv,内置金蝶云星空 MCP。下载 → 安装 → 打开 → 设置 → 金蝶 MCP 设置 → 填写连接参数,即可用自然语言操作金蝶。官网:https://wahailong.github.io/dsh-desktop" \
+              --target main
+          fi
+          gh release upload "$TAG" release/dsh-desktop-*/* --clobber
