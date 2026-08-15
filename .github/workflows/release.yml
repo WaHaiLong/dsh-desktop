@@ -1,9 +1,14 @@
 name: release
 
-# 手动触发。Release 由 `assemble` job 在 CI 内组装(机房内取产物,秒级),
-# 不再依赖本地下载 800MB 产物;创建 tag 不会再触发本 workflow(无 push: tags)。
+# 手动触发。每个平台构建完【自己】发布到同一个 Release —— 谁先好谁先上,
+# 慢的平台(Windows zip / NSIS)不阻塞快的(mac/Ubuntu)。
+# 建 Release 需要 contents:write,token 默认只有读,必须显式声明。
 on:
   workflow_dispatch:
+
+permissions:
+  contents: write
+  actions: write
 
 jobs:
   build:
@@ -14,22 +19,17 @@ jobs:
           - os: macos-latest
             target: --mac
             artifactName: dsh-desktop-macos
-            paths: |
-              dist/*.dmg
-              dist/*.zip
+            paths: "dist/*.dmg dist/*.zip"
           - os: ubuntu-latest
             target: --linux
             artifactName: dsh-desktop-ubuntu
-            paths: |
-              dist/*.AppImage
-              dist/*.deb
-          # Windows:store 压缩 = 纯归档不压缩。800MB 全是预编译二进制,
+            paths: "dist/*.AppImage dist/*.deb"
+          # Windows zip 用 store 压缩(纯归档不压缩):800MB 全是预编译二进制,
           # 压无可压,store 只快不亏(几分钟 vs LZMA 1 小时)。
           - os: windows-latest
             target: --win zip --config.compression=store
             artifactName: dsh-desktop-windows-zip
-            paths: |
-              dist/*.zip
+            paths: "dist/*.zip"
     runs-on: ${{ matrix.os }}
     env:
       CSC_IDENTITY_AUTO_DISCOVERY: 'false'
@@ -57,14 +57,30 @@ jobs:
       - name: Build
         run: npx electron-builder ${{ matrix.target }} --publish never
 
-      - name: Upload artifact
+      - name: Upload artifact (safety cache)
         uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.artifactName }}
           path: ${{ matrix.paths }}
           if-no-files-found: error
 
-  # Windows NSIS 安装版单独跑(约 1 小时,LZMA 压 800MB),不阻塞 Release 组装。
+      # 本平台发布:幂等(不存在则建 Release,存在则跳过),并发竞争用重试兜底。
+      - name: Publish to release (independent per platform)
+        shell: bash
+        run: |
+          TAG="v$(node -p 'require("./package.json").version')"
+          if ! gh release view "$TAG" >/dev/null 2>&1; then
+            gh release create "$TAG" \
+              --title "DeepSeek Harness Desktop $TAG" \
+              --notes "跨平台 · 零依赖 · 下载即用。捆绑独立 Node.js 运行时与 uv,内置金蝶云星空 MCP。官网:https://wahailong.github.io/dsh-desktop" \
+              --target main \
+            || gh release view "$TAG" >/dev/null 2>&1 \
+            || { echo "release create failed"; exit 1; }
+          fi
+          # --clobber 覆盖同名资产,重复运行幂等
+          gh release upload "$TAG" ${{ matrix.paths }} --clobber
+
+  # Windows NSIS 安装版:单独 job(约 1 小时,LZMA 压 800MB),独立发布,不阻塞任何人。
   nsis:
     runs-on: windows-latest
     env:
@@ -93,75 +109,23 @@ jobs:
       - name: Build NSIS installer
         run: npx electron-builder --win nsis --publish never
 
-      - name: Upload NSIS artifact
+      - name: Upload NSIS artifact (safety cache)
         uses: actions/upload-artifact@v4
         with:
           name: dsh-desktop-windows-nsis
           path: dist/*.exe
           if-no-files-found: error
 
-  # 三平台快产物就绪后,在 CI 内组装 GitHub Release(不需要等 NSIS)。
-  assemble:
-    runs-on: ubuntu-latest
-    needs: build
-    env:
-      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/download-artifact@v4
-        with:
-          path: release
-
-      - name: Create/update release
+      - name: Publish NSIS exe
         shell: bash
         run: |
           TAG="v$(node -p 'require("./package.json").version')"
-          set -e
           if ! gh release view "$TAG" >/dev/null 2>&1; then
-            cat > release-notes.md <<'EOF'
-          ## DeepSeek Harness Desktop
-
-          跨平台 · 零依赖 · 下载即用。捆绑独立 Node.js 运行时与 uv,内置金蝶云星空 MCP。
-
-          ### 平台安装包
-          - **macOS**:`.dmg` 安装版、`.zip` 便携版
-          - **Windows**:`.zip` 便携版、NSIS `.exe` 安装版
-          - **Linux**:`.AppImage`、`.deb`
-
-          ### 使用
-          下载 → 安装 → 打开 → 设置 → 金蝶 MCP 设置 → 填写连接参数 → 用自然语言操作金蝶。
-
-          ### 文档
-          - 官网:https://wahailong.github.io/dsh-desktop
-          - 教程:https://wahailong.github.io/dsh-desktop/tutorial.html
-          - Wiki:https://github.com/WaHaiLong/dsh-desktop/wiki
-          EOF
             gh release create "$TAG" \
               --title "DeepSeek Harness Desktop $TAG" \
-              --notes-file release-notes.md \
-              --target main
+              --notes "跨平台 · 零依赖 · 下载即用。官网:https://wahailong.github.io/dsh-desktop" \
+              --target main \
+            || gh release view "$TAG" >/dev/null 2>&1 \
+            || { echo "release create failed"; exit 1; }
           fi
-          # --clobber 覆盖已存在资产,重复运行幂等
-          gh release upload "$TAG" release/dsh-desktop-*/* --clobber
-
-  # NSIS 安装版完成后补进 Release(约 1 小时后)。
-  append-nsis:
-    runs-on: ubuntu-latest
-    needs: nsis
-    if: always() && needs.nsis.result == 'success'
-    env:
-      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/download-artifact@v4
-        with:
-          name: dsh-desktop-windows-nsis
-          path: nsis
-
-      - name: Append NSIS exe to release
-        shell: bash
-        run: |
-          TAG="v$(node -p 'require("./package.json").version')"
-          gh release upload "$TAG" nsis/* --clobber
+          gh release upload "$TAG" dist/*.exe --clobber
