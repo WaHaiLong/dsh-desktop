@@ -1,6 +1,7 @@
 'use strict';
 
-const { app, BrowserWindow, shell, Menu, ipcMain } = require('electron');
+const { app, BrowserWindow, shell, Menu, ipcMain, dialog, nativeImage } = require('electron');
+const { autoUpdater } = require('electron-updater');
 const { spawn, spawnSync } = require('node:child_process');
 const path = require('node:path');
 const fs = require('node:fs');
@@ -364,6 +365,74 @@ ipcMain.handle('kingdee:save-settings', (_e, settings) => {
 ipcMain.handle('kingdee:get-status', () => ({ uvx: findUv() !== 'uv' }));
 
 // ---------------------------------------------------------------------------
+// Auto-update
+// ---------------------------------------------------------------------------
+
+/** Windows 任务栏叠加的小红点资源(打包在 asar 的 electron/assets 下)。 */
+const UPDATE_DOT = path.join(__dirname, 'assets', 'update-dot.png');
+
+let updateAvailable = false;
+
+/** 有新版本时亮原生角标:macOS Dock 小红点 / Windows 任务栏叠加红点 / Linux 尽力而为。 */
+function setUpdateBadge(show) {
+  updateAvailable = show;
+  try {
+    if (process.platform === 'darwin' || process.platform === 'linux') {
+      app.setBadgeCount(show ? 1 : 0);
+    } else if (process.platform === 'win32') {
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.setOverlayIcon(
+          show ? nativeImage.createFromPath(UPDATE_DOT) : null,
+          show ? '新版本可用' : '',
+        );
+      }
+    }
+  } catch (_) { /* 角标只是提示,失败不崩溃 */ }
+}
+
+function setupAutoUpdater() {
+  if (!app.isPackaged) return; // 开发模式不检查更新,避免本地报错刷屏
+
+  autoUpdater.autoDownload = true;          // 后台静默下载
+  autoUpdater.autoInstallOnAppQuit = true;  // 用户直接退出时兜底安装
+
+  autoUpdater.on('update-available', () => {
+    logLine('updater', 'update available');
+    setUpdateBadge(true);
+  });
+  autoUpdater.on('update-not-available', () => {
+    logLine('updater', 'no update available');
+    setUpdateBadge(false);
+  });
+  autoUpdater.on('update-downloaded', async () => {
+    logLine('updater', 'update downloaded');
+    setUpdateBadge(true); // 下载完成仍亮着,直到用户处理
+    const win = mainWindow && !mainWindow.isDestroyed() ? mainWindow : undefined;
+    const { response } = await dialog.showMessageBox(win, {
+      type: 'info',
+      buttons: ['立即重启安装', '稍后'],
+      defaultId: 0,
+      cancelId: 1,
+      title: '发现新版本',
+      message: '新版本已下载完成,重启即可生效。',
+      detail: `当前版本 ${app.getVersion()},是否立即重启安装?`,
+    });
+    if (response === 0) {
+      setTimeout(() => autoUpdater.quitAndInstall(false, true), 500);
+    }
+  });
+  autoUpdater.on('error', (err) => {
+    logLine('updater', `error: ${err && err.message ? err.message : err}`);
+  });
+
+  // 启动检查一次,之后每小时一次。
+  autoUpdater.checkForUpdates().catch((err) => logLine('updater', `check failed: ${err && err.message}`));
+  setInterval(() => {
+    autoUpdater.checkForUpdates().catch(() => { /* 静默 */ });
+  }, 60 * 60 * 1000);
+}
+
+// ---------------------------------------------------------------------------
 // App lifecycle
 // ---------------------------------------------------------------------------
 
@@ -386,6 +455,7 @@ if (!gotLock) {
     writeKingdeePatch(loadSettings()); // ensure patch reflects saved settings
     createWindow();
     startServer();
+    setupAutoUpdater(); // 在 createWindow 之后,确保 mainWindow 可用于 Windows 角标
   });
 
   app.on('activate', () => {

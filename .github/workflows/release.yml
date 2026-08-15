@@ -17,13 +17,14 @@ jobs:
         include:
           - os: macos-latest
             target: --mac
-            paths: "dist/*.dmg dist/*.zip"
+            paths: "dist/*.dmg dist/*.zip dist/latest-mac.yml dist/*.blockmap"
           - os: ubuntu-latest
             target: --linux
-            paths: "dist/*.AppImage dist/*.deb"
+            paths: "dist/*.AppImage dist/*.deb dist/latest-linux.yml dist/*.blockmap"
           # Windows 必须 store(不压缩):7za 压 800MB 要 1 小时+日志崩溃(Invalid string length),
           # mac 用系统原生 zip 所以快。运行时已由 runtime:pack 打成单个 tar.gz,
           # 安装包只复制/归档这一个文件,Windows 打包从 30 分钟降到几分钟。
+          # latest.yml 由 nsis job 上传(exe 版清单);zip job 不传,避免互相覆盖。
           - os: windows-latest
             target: --win zip --config.compression=store
             paths: "dist/*.zip"
@@ -126,4 +127,5 @@ jobs:
             || gh release view "$TAG" >/dev/null 2>&1 \
             || { echo "release create failed"; exit 1; }
           fi
-          gh release upload "$TAG" dist/*.exe --clobber
+          # 更新清单 latest.yml + blockmap 一并上传,electron-updater 靠它发现新版本。
+          gh release upload "$TAG" dist/*.exe dist/latest.yml dist/*.blockmap --clobber

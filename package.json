@@ -28,24 +28,44 @@
     "productName": "DeepSeek Harness",
     "asar": true,
     "npmRebuild": false,
+    "publish": {
+      "provider": "github",
+      "owner": "WaHaiLong",
+      "repo": "dsh-desktop"
+    },
     "files": [
       "electron/**/*",
       "package.json"
     ],
     "extraResources": [
-      { "from": "resources/node", "to": "node" },
-      { "from": "resources/dsh-runtime.tar.gz", "to": "dsh-runtime.tar.gz" },
-      { "from": "resources/uv", "to": "uv" }
+      {
+        "from": "resources/node",
+        "to": "node"
+      },
+      {
+        "from": "resources/dsh-runtime.tar.gz",
+        "to": "dsh-runtime.tar.gz"
+      },
+      {
+        "from": "resources/uv",
+        "to": "uv"
+      }
     ],
     "mac": {
       "category": "public.app-category.developer-tools",
       "icon": "build/icon.png",
-      "target": ["dmg", "zip"],
+      "target": [
+        "dmg",
+        "zip"
+      ],
       "artifactName": "DeepSeekHarness-mac-${arch}.${ext}"
     },
     "win": {
       "icon": "build/icon.png",
-      "target": ["nsis", "zip"],
+      "target": [
+        "nsis",
+        "zip"
+      ],
       "artifactName": "DeepSeekHarness-windows-${arch}.${ext}"
     },
     "nsis": {
@@ -55,9 +75,15 @@
     },
     "linux": {
       "icon": "build/icon.png",
-      "target": ["AppImage", "deb"],
+      "target": [
+        "AppImage",
+        "deb"
+      ],
       "category": "Development",
       "artifactName": "DeepSeekHarness-linux-${arch}.${ext}"
     }
+  },
+  "dependencies": {
+    "electron-updater": "^6.8.9"
   }
 }
