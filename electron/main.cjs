@@ -1,6 +1,6 @@
 'use strict';
 
-const { app, BrowserWindow, shell, Menu, ipcMain, dialog, nativeImage } = require('electron');
+const { app, BrowserWindow, shell, Menu, ipcMain, dialog, nativeImage, Notification } = require('electron');
 const { autoUpdater } = require('electron-updater');
 const { spawn, spawnSync } = require('node:child_process');
 const path = require('node:path');
@@ -404,13 +404,36 @@ function setupAutoUpdater() {
   autoUpdater.autoDownload = true;          // 后台静默下载
   autoUpdater.autoInstallOnAppQuit = true;  // 用户直接退出时兜底安装
 
-  autoUpdater.on('update-available', () => {
+  // 并发检查有竞态:启动检查 + 定时器重叠时,第二次会误报 update-not-available,
+  // 把已亮起的红点清掉。用 inFlight 串行化,并只在「从未宣布过更新」时才清红点。
+  let checkInFlight = false;
+  const checkOnce = () => {
+    if (checkInFlight) return;
+    checkInFlight = true;
+    autoUpdater.checkForUpdates()
+      .catch((err) => logLine('updater', `check failed: ${err && err.message}`))
+      .finally(() => { checkInFlight = false; });
+  };
+
+  autoUpdater.on('update-available', (info) => {
     logLine('updater', 'update available');
     setUpdateBadge(true);
+    // 红点亮了但用户不知道在干嘛:同时弹一个系统通知说明「正在后台下载」。
+    try {
+      const ver = info && info.version ? info.version : '新版本';
+      if (Notification.isSupported()) {
+        const n = new Notification({
+          title: '发现新版本',
+          body: `有 ${ver} 可用,正在后台下载,下载完成后会提示重启安装。`,
+        });
+        n.on('click', () => { if (mainWindow && !mainWindow.isDestroyed()) mainWindow.show(); });
+        n.show();
+      }
+    } catch (_) { /* 通知失败不阻塞更新 */ }
   });
   autoUpdater.on('update-not-available', () => {
     logLine('updater', 'no update available');
-    setUpdateBadge(false);
+    if (!updateAvailable) setUpdateBadge(false); // 已宣布过更新(下载中/待装)就不再熄灯
   });
   autoUpdater.on('update-downloaded', async () => {
     logLine('updater', 'update downloaded');
@@ -433,11 +456,9 @@ function setupAutoUpdater() {
     logLine('updater', `error: ${err && err.message ? err.message : err}`);
   });
 
-  // 启动检查一次,之后每小时一次。
-  autoUpdater.checkForUpdates().catch((err) => logLine('updater', `check failed: ${err && err.message}`));
-  setInterval(() => {
-    autoUpdater.checkForUpdates().catch(() => { /* 静默 */ });
-  }, 60 * 60 * 1000);
+  // 启动检查一次,之后每小时一次;走 checkOnce 串行化,避免并发竞态误清红点。
+  checkOnce();
+  setInterval(checkOnce, 60 * 60 * 1000);
 }
 
 // ---------------------------------------------------------------------------
