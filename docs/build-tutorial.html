@@ -1,0 +1,282 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>从零把 dsh 打包成桌面版并开源 — DeepSeek Harness Desktop</title>
+  <meta name="description" content="全流程教程:从零把一个 CLI 工具(dsh)打包成跨平台桌面 App,并开源、CI 自动发布、官网直链下载,全闭环。">
+  <link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+
+<nav class="nav">
+  <div class="nav-inner">
+    <a class="brand" href="index.html"><span class="brand-logo">🧭</span> DeepSeek Harness Desktop</a>
+    <div class="nav-links">
+      <a href="index.html">首页</a>
+      <a href="tutorial.html">教程</a>
+      <a href="build-tutorial.html" class="active">打包开源教程</a>
+      <a href="tech.html">技术栈</a>
+      <a class="btn" href="https://github.com/WaHaiLong/dsh-desktop/releases/latest">立即下载</a>
+    </div>
+  </div>
+</nav>
+
+<header class="hero" style="padding: 56px 0 32px;">
+  <div class="container">
+    <h1 style="font-size: clamp(26px, 4vw, 38px);">从零把 dsh 打包成桌面版并开源</h1>
+    <p class="sub" style="font-size: 16px;">本教程以 <b>DeepSeek Harness Desktop</b>(开源仓库 <a href="https://github.com/WaHaiLong/dsh-desktop" target="_blank">WaHaiLong/dsh-desktop</a>)为完整实例:<br>一个 CLI 工具 → 三平台安装包 → CI 自动发布 → 官网直链下载,全流程、全闭环。</p>
+  </div>
+</header>
+
+<section class="section">
+  <div class="container prose">
+    <h2>0. 先看懂整体:这个 App 到底由什么组成</h2>
+    <p>DeepSeek Harness(<code>dsh</code>)是一个 <b>Node.js CLI</b>,自带一个 <code>dsh web</code> 命令,会在本机起一个 Web 界面。桌面版要做的事就一件:</p>
+    <p><b>给它套一个 Electron 壳,并把运行它需要的所有东西捆绑进安装包</b>,让用户下载即用、不用装 Node。</p>
+    <p>整个 App 分四层:</p>
+    <table>
+      <thead><tr><th>层</th><th>内容</th><th>为什么捆绑</th></tr></thead>
+      <tbody>
+        <tr><td>壳</td><td>Electron(Chromium + 自带 Node)</td><td>把 <code>dsh web</code> 的网页装进桌面窗口</td></tr>
+        <tr><td>核心</td><td><code>@deepseek-ai/dsh</code> 及全部依赖(node_modules)</td><td>用户机器零安装</td></tr>
+        <tr><td>运行时</td><td>独立 Node.js(不是 Electron 内置那个)</td><td>原生模块(<code>node-pty</code>/<code>sharp</code>/<code>koffi</code>)要以正确 ABI 加载</td></tr>
+        <tr><td>工具链</td><td>uv(可选的 Python 运行时)</td><td>让 Python 写的 MCP 服务器零安装拉起</td></tr>
+      </tbody>
+    </table>
+    <p>所以「打包」的本质,就是:<b>把上面这四层文件复制到一起,再压成一个安装包</b>。慢的永远是"复制文件"那步——这也是后文 Windows 慢的根因。</p>
+  </div>
+</section>
+
+<section class="section section-alt">
+  <div class="container prose">
+    <h2>1. 准备环境</h2>
+    <ul>
+      <li><b>Node.js</b> 20+ —— 只在构建机上需要,打包进 App 的是另一份独立 Node。</li>
+      <li><b>npm</b> —— 随 Node 自带。</li>
+      <li><b>GitHub 账号</b> —— 托管源码、跑 CI、发 Release、挂官网。</li>
+    </ul>
+    <p>三平台安装包(macOS/Windows/Linux)由 <b>GitHub Actions</b> 各平台独立构建,本地只需要能跑通一个平台即可。下面以 macOS 为例。</p>
+  </div>
+</section>
+
+<section class="section">
+  <div class="container prose">
+    <h2>2. 建工程:一个最小的 Electron 壳</h2>
+    <p>初始化并安装依赖:</p>
+<pre><code>mkdir dsh-desktop &amp;&amp; cd dsh-desktop
+npm init -y
+npm install --save-dev electron electron-builder</code></pre>
+    <p>核心文件就两个:<code>package.json</code> 和主进程 <code>electron/main.cjs</code>。壳的逻辑很简单——<b>Electron 只负责:用捆绑的 Node 把 <code>dsh web</code> 拉起来,把它的网页装进窗口。</b></p>
+<pre><code>// electron/main.cjs(关键逻辑)
+function startServer() {
+  const nodeBin = path.join(resourcesRoot(), 'node', process.platform === 'win32' ? 'node.exe' : 'node');
+  const dshBin  = path.join(resourcesRoot(), 'dsh', 'node_modules', '@deepseek-ai', 'dsh', 'lib', 'bin.js');
+  serverProc = spawn(nodeBin, [dshBin, 'web', '--host', '127.0.0.1', '--port', '0'], {
+    env: { ...process.env, DSH_HOME: dshHome },
+    stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true,
+  });
+  // 从 stdout 里解析 dsh 自报的端口,然后把窗口指向 http://127.0.0.1:&lt;port&gt;/
+  serverProc.stdout.on('data', (c) =&gt; {
+    const m = c.toString().match(/https?:\/\/(?:127\.0\.0\.1|localhost):(\d+)/);
+    if (m) { loadApp(m[1]); }
+  });
+}</code></pre>
+    <p>要点:</p>
+    <ul>
+      <li>开发时从项目 <code>resources/</code> 取运行时,打包后从 <code>process.resourcesPath</code> 取 —— 一个 <code>resourcesRoot()</code> 函数根据 <code>app.isPackaged</code> 切换。</li>
+      <li><code>DSH_HOME</code> 指向每用户数据目录,配置和 API Key 持久保存在本机。</li>
+      <li>退出时杀掉 <code>dsh</code> 子进程,避免残留后台进程。</li>
+    </ul>
+  </div>
+</section>
+
+<section class="section section-alt">
+  <div class="container prose">
+    <h2>3. 捆绑运行时:三件事</h2>
+    <p>要让用户"下载即用",得把 <b>独立 Node</b>、<b>dsh 本体</b>、<b>uv</b> 塞进包里。用三个 npm script 在打包前准备好:</p>
+<pre><code>"scripts": {
+  "fetch:node":      "node scripts/fetch-node.mjs",   // 下载独立 Node → resources/node/
+  "fetch:uv":        "node scripts/fetch-uv.mjs",     // 下载 uv         → resources/uv/
+  "runtime:install": "npm install --prefix resources/dsh", // 装 dsh 及其依赖 → resources/dsh/
+  "dist":            "electron-builder --publish never",
+  "build":           "npm run fetch:node &amp;&amp; npm run fetch:uv &amp;&amp; npm run runtime:install &amp;&amp; npm run dist"
+}</code></pre>
+    <p>两个下载脚本的核心逻辑:</p>
+<pre><code>// scripts/fetch-node.mjs —— 只下载当前平台的独立 Node 二进制
+const url = `https://nodejs.org/dist/${version}/node-${version}-${platform}-${arch}.${ext}`;
+const res = await fetch(url);
+await pipeline(Readable.fromWeb(res.body), createWriteStream(archive)); // 流式下载
+// tar 解出 bin/node,移到 resources/node/ —— 每个平台要在对应平台构建(二进制分系统)
+
+// scripts/fetch-uv.mjs —— 同理下载 uv;支持 UV_MIRROR 走代理、UV_LOCAL 复用本地二进制</code></pre>
+    <p>然后告诉 electron-builder 把这些目录作为<b>额外资源</b>原样放进安装包(<code>extraResources</code>):</p>
+<pre><code>"build": {
+  "files": ["electron/**/*", "package.json"],
+  "extraResources": [
+    { "from": "resources/node",          "to": "node" },
+    { "from": "resources/dsh/node_modules", "to": "dsh/node_modules" },
+    { "from": "resources/uv",            "to": "uv" }
+  ]
+}</code></pre>
+    <p><code>files</code> 是打进 <code>app.asar</code> 的<b>代码</b>;<code>extraResources</code> 是<b>原样复制</b>到 <code>resources/</code> 的运行时。这一步就是把那几百 MB、几万个小文件复制一遍 —— 打包最耗时的一步。</p>
+  </div>
+</section>
+
+<section class="section">
+  <div class="container prose">
+    <h2>4. 三平台打包配置</h2>
+    <p>electron-builder 用一个 <code>build</code> 配置同时覆盖三平台:</p>
+<pre><code>"build": {
+  "appId": "com.deepseek.harness.desktop",
+  "productName": "DeepSeek Harness",
+  "asar": true, "npmRebuild": false,
+  "mac":    { "target": ["dmg", "zip"], "artifactName": "DeepSeekHarness-mac-${arch}.${ext}" },
+  "win":    { "target": ["nsis", "zip"],"artifactName": "DeepSeekHarness-windows-${arch}.${ext}" },
+  "linux":  { "target": ["AppImage", "deb"], "artifactName": "DeepSeekHarness-linux-${arch}.${ext}" },
+  "nsis":   { "oneClick": false, "allowToChangeInstallationDirectory": true,
+              "deleteAppDataOnUninstall": false, "useZip": true }
+}</code></pre>
+    <ul>
+      <li><b>产物文件名不带版本号</b>、加平台前缀 —— 这样官网可以写死直链 <code>releases/latest/download/DeepSeekHarness-mac-arm64.dmg</code>,每次发新版不用改网页。</li>
+      <li><b>NSIS 的 <code>useZip: true</code></b> 是个关键优化(见第 8 节):让 Windows 安装器用 Deflate 而非默认的 LZMA,打包从 1 小时缩到几分钟。</li>
+      <li><b><code>npmRebuild: false</code></b>:原生模块直接用 dsh 依赖里的预编译产物,不重新编译。</li>
+    </ul>
+  </div>
+</section>
+
+<section class="section section-alt">
+  <div class="container prose">
+    <h2>5. 本地跑通并出包</h2>
+<pre><code>npm install                 # 应用 devDeps(electron、electron-builder)
+npm run build               # 一键:下载 Node/uv + 装 dsh + 打包
+ls dist/                    # 本地平台的安装包就出来了</code></pre>
+    <p>开发调试则用:</p>
+<pre><code>npm install &amp;&amp; npm run fetch:node &amp;&amp; npm run runtime:install
+npm start                   # Electron 启动,dsh web 以子进程跑起来,窗口加载它</code></pre>
+    <p><b>注意</b>:独立 Node 二进制是分系统的,<code>fetch:node</code> 在 mac 上下到的是 mac 版。所以三平台必须各自在对应平台构建 —— 这正是 CI 要干的。</p>
+  </div>
+</section>
+
+<section class="section">
+  <div class="container prose">
+    <h2>6. CI:三平台并行构建、各自发布</h2>
+    <p>核心思路:<b>每个平台构建完,自己上传到同一个 GitHub Release —— 谁先好谁先上,慢平台不阻塞快的平台</b>(Windows 打包慢,不该卡着 mac/Linux 的用户)。</p>
+<pre><code># .github/workflows/release.yml(结构)
+permissions:
+  contents: write          # 建 Release 需要写权限,token 默认只读,必须显式声明
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-latest
+            target: --mac
+            paths: "dist/*.dmg dist/*.zip"
+          - os: ubuntu-latest
+            target: --linux
+            paths: "dist/*.AppImage dist/*.deb"
+          - os: windows-latest
+            target: --win zip
+            paths: "dist/*.zip"
+    runs-on: ${{ matrix.os }}
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4            # Node 22 + npm 缓存
+      - run: npm install
+      - run: npm run runtime:install
+      - run: npm run fetch:node
+      - run: npm run fetch:uv
+      - run: npx electron-builder ${{ matrix.target }} --publish never
+      - run: |                                 # 本平台发布:幂等 + 并发重试兜底
+          TAG="v$(node -p 'require("./package.json").version")"
+          if ! gh release view "$TAG" &gt;/dev/null 2&gt;&amp;1; then
+            gh release create "$TAG" --title "..." --notes "..." --target main \
+              || gh release view "$TAG" &gt;/dev/null 2&gt;&amp;1 || exit 1
+          fi
+          gh release upload "$TAG" ${{ matrix.paths }} --clobber
+
+  nsis:                     # Windows 安装版单独一个 job,不阻塞任何人
+    runs-on: windows-latest
+    steps:
+      - run: npx electron-builder --win nsis --publish never
+      - run: gh release upload "$TAG" dist/*.exe --clobber</code></pre>
+    <p>要点:</p>
+    <ul>
+      <li><b>幂等</b>:<code>gh release view</code> 判断存在则跳过 create,<code>--clobber</code> 覆盖同名资产,重复跑不报错。</li>
+      <li><b>并发兜底</b>:两个 job 同时发现 Release 不存在、同时 create —— 用 <code>|| gh release view || exit 1</code> 兜住 "already exists" 竞争。</li>
+      <li><b>失败不互相连坐</b>:<code>fail-fast: false</code>,一个平台挂了其他照常发。</li>
+    </ul>
+  </div>
+</section>
+
+<section class="section section-alt">
+  <div class="container prose">
+    <h2>7. 开源配套:License、README、官网</h2>
+    <h3>License</h3>
+    <p>直接在 GitHub 网页上创建 <code>LICENSE</code>(选 MIT 即可)。dsh 本身也是 MIT,见其 <code>THIRD_PARTY_NOTICES</code>。</p>
+    <h3>README</h3>
+    <p>一个合格的 README 至少包含:项目一句话介绍、官网链接、<b>工作原理</b>(几行说明它是"Electron 壳 + 捆绑 Node 跑 dsh web")、构建方法、发布产物表、License。中英双语可折叠更友好。</p>
+    <h3>官网(GitHub Pages)</h3>
+    <p>把官网源码放到 <code>docs/</code>,仓库 Settings → Pages → 选 <code>main / docs</code>,即得 <code>https://&lt;用户名&gt;.github.io/&lt;仓库名&gt;/</code>。改动推上去自动重新部署。</p>
+    <p>官网的<b>下载区用写死的直链</b>,指向 Release 的最新版:</p>
+<pre><code>&lt;a href="https://github.com/&lt;org&gt;/&lt;repo&gt;/releases/latest/download/DeepSeekHarness-mac-arm64.dmg"&gt;下载 .dmg&lt;/a&gt;</code></pre>
+    <p>配合第 4 节的"文件名不带版本号",每次发新版自动生效,网页永不失效。</p>
+  </div>
+</section>
+
+<section class="section">
+  <div class="container prose">
+    <h2>8. 发布闭环 &amp; 踩坑实录</h2>
+    <h3>完整的闭环</h3>
+<pre><code>git commit &amp;&amp; git push origin main     # ① 改代码/官网
+# ② GitHub → Actions → release → Run workflow 手动触发
+# ③ 三平台并行构建,各自上传到同一个 Release
+# ④ 用户打开官网,点直链 → 最新版安装包</code></pre>
+    <p>以后每次发新版,只需推代码 + 点一次 Run workflow,产物自动上 Release,官网直链自动指向最新版。</p>
+
+    <h3>坑 1:Windows 打包 1 小时 —— 压缩算法选错了</h3>
+    <p>electron-builder 打 NSIS 安装器时,内部先用 7z 归档整个应用,<b>默认 LZMA</b>。而 app 里有几百 MB 预编译二进制(压无可压),LZMA 花 1 小时 CPU 只压掉一点。修复:给 NSIS 加 <code>useZip: true</code>,改用 <b>Deflate</b> —— <b>压缩效果一样,速度快 20 倍</b>(几分钟)。同样,Windows 便携 zip 不要加 <code>--config.compression=store</code>,zip 默认就是 Deflate。</p>
+
+    <h3>坑 2:为什么 Windows 还是比 mac/Linux 慢很多</h3>
+    <p>同一份 ~500MB / 3 万个小文件:macOS 打包 1 分 44 秒,Windows 要 30 分钟。<b>慢的不是压缩,是"复制文件"那步</b> —— Windows 的 NTFS 处理海量小文件比 APFS/ext4 慢一个数量级,加上 Defender 实时扫描每写一个文件就扫一次毒。这不是配置能解决的,治本要减少文件数/体积(见下)。</p>
+
+    <h3>坑 3:upload-artifact 用空格分隔路径会报错</h3>
+    <p>一条路径含空格(GitHub Actions 的环境变量不支持空格分隔列表),会静默失败或报错。绕开它 —— 反正最终要上传 Release,<b>直接 <code>gh release upload</code>,根本不需要 artifact 中转</b>,还省一次下载。</p>
+
+    <h3>坑 4:三平台互相阻塞</h3>
+    <p>最初是一个 job 等所有平台构建完再发布,Windows 慢时 mac/Linux 用户干等。改成<b>每平台独立发布</b>后,谁先好谁先上。</p>
+
+    <h3>优化方向:给安装包瘦身</h3>
+    <p>你的 <code>node_modules</code> 里往往躺着一堆<b>全平台预编译二进制</b>(<code>node-pty/prebuilds/</code> 下 darwin/win32/linux 各一份,<code>@img</code> 的 sharp 同样)。每个平台实际只用其中一份,可以打包前只留当前平台那份,<b>砍掉几十到上百 MB</b>。原生二进制 + 其 <code>.pdb</code> 调试符号(纯废料)是最先该清的。</p>
+  </div>
+</section>
+
+<section class="section section-alt">
+  <div class="container prose">
+    <h2>9. 一页速查</h2>
+    <table>
+      <thead><tr><th>环节</th><th>用什么</th><th>一句话</th></tr></thead>
+      <tbody>
+        <tr><td>壳</td><td>Electron</td><td>窗口 + 装下 web UI</td></tr>
+        <tr><td>运行时</td><td>独立 Node + uv</td><td>用户零安装</td></tr>
+        <tr><td>打包</td><td>electron-builder</td><td>一个配置出三平台安装包</td></tr>
+        <tr><td>发布</td><td>GitHub Actions + Release</td><td>三平台并行、各自上传、幂等</td></tr>
+        <tr><td>官网</td><td>GitHub Pages + 写死直链</td><td>最新版自动指向、网页永不失效</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<footer class="footer">
+  <div class="container">
+    <p>DeepSeek Harness Desktop · <a href="https://github.com/WaHaiLong/dsh-desktop" target="_blank">GitHub 仓库</a> · MIT License</p>
+  </div>
+</footer>
+
+</body>
+</html>
