@@ -11,7 +11,20 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [macos-latest, windows-latest, ubuntu-latest]
+        include:
+          - os: macos-latest
+            artifactPaths: |
+              dist/*.dmg
+              dist/*.zip
+          - os: windows-latest
+            # Windows ZIP is uploaded early by the fast-path step, so the final
+            # upload only needs the NSIS .exe here (no duplicate 800MB zip).
+            artifactPaths: |
+              dist/*.exe
+          - os: ubuntu-latest
+            artifactPaths: |
+              dist/*.AppImage
+              dist/*.deb
     runs-on: ${{ matrix.os }}
     env:
       CSC_IDENTITY_AUTO_DISCOVERY: 'false'
@@ -36,12 +49,15 @@ jobs:
       - name: Fetch uv
         run: npm run fetch:uv
 
-      # Windows NSIS compresses the ~800MB bundle with LZMA and takes ~1h.
-      # Build the zip first (fast) and upload it early so a Windows download
-      # is available within minutes; the NSIS installer catches up later.
+      # Windows NSIS compresses the ~800MB bundle with LZMA and takes ~1h on the
+      # 2-vCPU runner. Build the zip first with "store" compression (pure archive,
+      # no deflate/LZMA — the bundle is prebuilt binaries, incompressible anyway)
+      # so a Windows download is ready within minutes; NSIS catches up later.
+      # Note: a plain `--win zip` with default compression is NOT fast — 7za spent
+      # ~61min deflating before crashing the logger with "Invalid string length".
       - name: Build Windows ZIP (fast path)
         if: matrix.os == 'windows-latest'
-        run: npx electron-builder --win zip --publish never
+        run: npx electron-builder --win zip -c.compression=store --publish never
 
       - name: Upload Windows ZIP
         if: matrix.os == 'windows-latest'
@@ -64,10 +80,5 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: dsh-desktop-${{ matrix.os }}
-          path: |
-            dist/*.dmg
-            dist/*.zip
-            dist/*.exe
-            dist/*.AppImage
-            dist/*.deb
+          path: ${{ matrix.artifactPaths }}
           if-no-files-found: ignore
