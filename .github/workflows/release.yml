@@ -23,8 +23,10 @@ jobs:
             paths: "dist/*.AppImage dist/*.deb"
           # Windows zip 用 store 压缩(纯归档不压缩):800MB 全是预编译二进制,
           # 压无可压,store 只快不亏(几分钟 vs LZMA 1 小时)。
+          # Windows 必须 store(不压缩):7za 压 800MB 要 1 小时+日志崩溃(Invalid string length)。
+          # mac 用系统原生 zip 所以快;Windows 是 7za,除 store 外都慢。
           - os: windows-latest
-            target: --win zip
+            target: --win zip --config.compression=store
             paths: "dist/*.zip"
     runs-on: ${{ matrix.os }}
     env:
@@ -96,7 +98,7 @@ jobs:
         run: npm run fetch:uv
 
       - name: Build NSIS installer
-        run: npx electron-builder --win nsis --publish never
+        run: npx electron-builder --win nsis --config.compression=store --publish never
 
       - name: Publish NSIS exe
         shell: bash
