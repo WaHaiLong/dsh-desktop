@@ -352,6 +352,7 @@ function buildMenu() {
       label: '设置',
       submenu: [
         { label: '金蝶 MCP 设置', click: () => openSettings() },
+        { label: '检查更新', click: () => checkForUpdate() },
         { type: 'separator' },
         { role: 'quit', label: '退出' },
       ],
@@ -368,6 +369,18 @@ function buildMenu() {
 
 // 主窗口悬浮齿轮按钮 → 打开金蝶 MCP 设置
 ipcMain.on('main:open-settings', () => openSettings());
+
+// 设置窗口:版本号 + 手动检查更新
+ipcMain.handle('app:get-version', () => app.getVersion());
+ipcMain.handle('app:check-update', async () => {
+  if (!app.isPackaged) return '开发模式不检查更新。';
+  const result = await checkForUpdate();
+  if (result == null) return '检查失败,请稍后重试或查看日志。';
+  if (result.isUpdateAvailable) {
+    return `发现新版本 v${result.updateInfo && result.updateInfo.version},正在后台下载,完成后会提示重启安装。`;
+  }
+  return `已是最新版本 (v${app.getVersion()})。`;
+});
 
 ipcMain.handle('kingdee:get-settings', () => loadSettings());
 ipcMain.handle('kingdee:save-settings', (_e, settings) => {
@@ -404,22 +417,29 @@ function setUpdateBadge(show) {
   } catch (_) { /* 角标只是提示,失败不崩溃 */ }
 }
 
+// 手动/定时触发一次更新检查。inFlight 串行化:并发检查有竞态,第二次会误报
+// update-not-available 把已亮的红点清掉。返回检查结果(供设置窗口显示状态)。
+let updateCheckInFlight = false;
+async function checkForUpdate() {
+  if (!app.isPackaged) return null;
+  if (updateCheckInFlight) return null;
+  updateCheckInFlight = true;
+  try {
+    const result = await autoUpdater.checkForUpdates();
+    return result || null;
+  } catch (err) {
+    logLine('updater', `check failed: ${err && err.message ? err.message : err}`);
+    return null;
+  } finally {
+    updateCheckInFlight = false;
+  }
+}
+
 function setupAutoUpdater() {
   if (!app.isPackaged) return; // 开发模式不检查更新,避免本地报错刷屏
 
   autoUpdater.autoDownload = true;          // 后台静默下载
   autoUpdater.autoInstallOnAppQuit = true;  // 用户直接退出时兜底安装
-
-  // 并发检查有竞态:启动检查 + 定时器重叠时,第二次会误报 update-not-available,
-  // 把已亮起的红点清掉。用 inFlight 串行化,并只在「从未宣布过更新」时才清红点。
-  let checkInFlight = false;
-  const checkOnce = () => {
-    if (checkInFlight) return;
-    checkInFlight = true;
-    autoUpdater.checkForUpdates()
-      .catch((err) => logLine('updater', `check failed: ${err && err.message}`))
-      .finally(() => { checkInFlight = false; });
-  };
 
   autoUpdater.on('update-available', (info) => {
     logLine('updater', 'update available');
@@ -462,9 +482,9 @@ function setupAutoUpdater() {
     logLine('updater', `error: ${err && err.message ? err.message : err}`);
   });
 
-  // 启动检查一次,之后每小时一次;走 checkOnce 串行化,避免并发竞态误清红点。
-  checkOnce();
-  setInterval(checkOnce, 60 * 60 * 1000);
+  // 启动检查一次,之后每小时一次;走 checkForUpdate 串行化,避免并发竞态误清红点。
+  checkForUpdate();
+  setInterval(() => { checkForUpdate(); }, 60 * 60 * 1000);
 }
 
 // ---------------------------------------------------------------------------
