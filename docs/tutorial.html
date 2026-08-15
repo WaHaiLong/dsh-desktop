@@ -88,12 +88,11 @@ npm run dist                # 在 dist/ 下生成安装包
     <p><b>注意</b>:每个平台要在对应平台上构建——捆绑的独立 Node 二进制是分系统的。</p>
 
     <h3>CI 自动构建</h3>
-    <p><code>.github/workflows/release.yml</code> 自动完成跨平台构建:推送 <code>v*</code> 标签或手动触发 workflow,三平台并行(macOS / Ubuntu / Windows),产物上传为 Actions Artifacts。</p>
+    <p><code>.github/workflows/release.yml</code> 手动触发,三平台并行(macOS / Ubuntu / Windows),各自构建完直接上传到同一个 GitHub Release。</p>
 
     <h3>发布流程</h3>
-<pre>git tag v0.x.x
-git push origin v0.x.x    # 触发 release workflow</pre>
-    <p>CI 跑完后,把 Actions Artifacts 下载下来上传到 <a href="https://github.com/WaHaiLong/dsh-desktop/releases" target="_blank">GitHub Releases</a> 页面,官网下载按钮自动指向最新版本。</p>
+<pre>GitHub 仓库 → Actions → release → Run workflow</pre>
+    <p>CI 跑完后自动发布到 <a href="https://github.com/WaHaiLong/dsh-desktop/releases" target="_blank">GitHub Releases</a>,官网下载按钮直接指向最新版本,无需手动下载上传。</p>
   </div>
 </section>
 

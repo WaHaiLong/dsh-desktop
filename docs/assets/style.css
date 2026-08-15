@@ -118,6 +118,8 @@ a:hover { text-decoration: underline; }
 .dl-card h3 { font-size: 17px; margin-bottom: 4px; }
 .dl-card .fmt { font-size: 13px; color: var(--text-dim); margin-bottom: 16px; font-family: var(--mono); }
 .dl-card .btn { width: 100%; justify-content: center; }
+.dl-actions { display: flex; flex-direction: column; gap: 10px; }
+.dl-note { margin-top: 14px; font-size: 12px; line-height: 1.5; color: var(--text-dim); }
 .dl-tip { margin-top: 20px; font-size: 13px; color: var(--text-dim); text-align: center; }
 
 /* ---------- Steps ---------- */

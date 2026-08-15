@@ -38,11 +38,11 @@
     "mac": {
       "category": "public.app-category.developer-tools",
       "target": ["dmg", "zip"],
-      "artifactName": "DeepSeekHarness-${version}-${arch}.${ext}"
+      "artifactName": "DeepSeekHarness-mac-${arch}.${ext}"
     },
     "win": {
       "target": ["nsis", "zip"],
-      "artifactName": "DeepSeekHarness-${version}-${arch}.${ext}"
+      "artifactName": "DeepSeekHarness-windows-${arch}.${ext}"
     },
     "nsis": {
       "oneClick": false,
@@ -52,7 +52,7 @@
     "linux": {
       "target": ["AppImage", "deb"],
       "category": "Development",
-      "artifactName": "DeepSeekHarness-${version}-${arch}.${ext}"
+      "artifactName": "DeepSeekHarness-linux-${arch}.${ext}"
     }
   }
 }
