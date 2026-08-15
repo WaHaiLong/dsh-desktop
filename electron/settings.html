@@ -67,6 +67,13 @@
   </div>
 
   <div class="note" id="note"></div>
+
+  <div class="note" style="margin-top:24px; display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
+    <strong>版本与更新</strong>
+    <span id="appVersion" style="color:var(--fg)"></span>
+    <button type="button" class="cancel" id="checkUpdateBtn" style="padding:6px 14px; font-size:13px;">检查更新</button>
+    <span class="status" id="updateStatus"></span>
+  </div>
 </div>
 
 <script>
@@ -85,6 +92,7 @@
     $('note').innerHTML = uvxFound
       ? '✅ 已检测到 <code>uvx</code>（用于运行 kingdee-mcp）。保存后会自动重启服务并接入金蝶。'
       : '⚠️ 未检测到 <code>uvx</code>。请先安装 uv：<code>brew install uv</code> 或 <code>pip install uv</code>，然后重新保存。';
+    $('appVersion').textContent = 'v' + (await window.kingdee.getVersion());
   }
 
   $('saveBtn').addEventListener('click', async () => {
@@ -108,6 +116,16 @@
   });
 
   $('cancelBtn').addEventListener('click', () => window.close());
+
+  $('checkUpdateBtn').addEventListener('click', async () => {
+    const st = $('updateStatus');
+    st.textContent = '检查中…';
+    st.className = 'status';
+    const msg = await window.kingdee.checkUpdate();
+    st.textContent = msg;
+    st.className = 'status ' + (msg.startsWith('已是最新') || msg.startsWith('发现') ? 'ok' : 'err');
+  });
+
   load();
 </script>
 </body>

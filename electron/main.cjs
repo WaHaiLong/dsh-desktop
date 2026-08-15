@@ -223,7 +223,13 @@ function startServer() {
   logLine('spawn', `dsh=${dshBin} args=${args.join(' ')}`);
 
   serverProc = spawn(nodeBin, [dshBin, ...args], {
-    env: { ...process.env, DSH_HOME: dshHome, FORCE_COLOR: '0', NO_COLOR: '1' },
+    env: {
+      ...process.env,
+      DSH_HOME: dshHome,
+      DSH_BUNDLED_SKILL_DIR: path.join(resourcesRoot(), 'skills'),
+      FORCE_COLOR: '0',
+      NO_COLOR: '1',
+    },
     stdio: ['ignore', 'pipe', 'pipe'],
     windowsHide: true,
   });

@@ -39,11 +39,16 @@ const PATCHES = [
     ['displayName: "DeepSeek"', `displayName: "${BRAND}"`],
     ['name: "DeepSeek"', `name: "${BRAND}"`],
     ['title: "DeepSeek Harness — plugin-based agent harness"', `title: "${BRAND}"`],
+    // 侧栏模型列表展示名:DeepSeek-V4-Flash → 金蝶V4-Flash(仅展示,ID 不动)
+    ['"DeepSeek-V4-Flash"', '"金蝶V4-Flash"'],
+    ['"DeepSeek-V4-Pro"', '"金蝶V4-Pro"'],
   ]],
   // DeepSeek LLM 提供商展示名
   ['@deepseek-ai/dsh-llm-deepseek/lib/index.js', [
     ['name: "DeepSeek"', `name: "${BRAND}"`],
     ['displayName: "DeepSeek"', `displayName: "${BRAND}"`],
+    ['"DeepSeek-V4-Flash"', '"金蝶V4-Flash"'],
+    ['"DeepSeek-V4-Pro"', '"金蝶V4-Pro"'],
   ]],
   // 设置页模型空态提示
   ['@deepseek-ai/dsh-client-ui-settings-models/lib/client.js', [

@@ -1,6 +1,6 @@
 {
   "name": "dsh-desktop",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "description": "DeepSeek Harness desktop app — cross-platform wrapper for the dsh web UI",
   "author": {
     "name": "DeepSeek Harness Desktop",
@@ -49,6 +49,10 @@
       {
         "from": "resources/uv",
         "to": "uv"
+      },
+      {
+        "from": "resources/skills",
+        "to": "skills"
       }
     ],
     "mac": {
