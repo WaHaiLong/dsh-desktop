@@ -96,7 +96,7 @@ jobs:
         run: npm run fetch:uv
 
       - name: Build NSIS installer
-        run: npx electron-builder --win nsis --publish never
+        run: npx electron-builder --win nsis --config.compression=store --publish never
 
       - name: Publish NSIS exe
         shell: bash
