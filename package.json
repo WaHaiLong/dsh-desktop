@@ -71,7 +71,8 @@
     "nsis": {
       "oneClick": false,
       "allowToChangeInstallationDirectory": true,
-      "deleteAppDataOnUninstall": false
+      "deleteAppDataOnUninstall": false,
+      "runAfterFinish": true
     },
     "linux": {
       "icon": "build/icon.png",

@@ -101,12 +101,12 @@ function escapeHtml(s) {
 
 function showError(message) {
   if (!mainWindow) return;
-  const html = `<!doctype html><html><head><meta charset="utf-8"><title>DeepSeek Harness</title>
+  const html = `<!doctype html><html><head><meta charset="utf-8"><title>金蝶云星空助手</title>
 <style>body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
 background:#0e1117;color:#e6edf3;display:flex;align-items:center;justify-content:center;height:100vh}
 .box{max-width:640px;padding:32px;text-align:center}h1{font-size:20px;margin-bottom:16px}
 pre{background:#161b22;padding:16px;border-radius:8px;text-align:left;white-space:pre-wrap;word-break:break-word;
-font-size:13px;color:#f47067}</style></head><body><div class="box"><h1>DeepSeek Harness failed to start</h1>
+font-size:13px;color:#f47067}</style></head><body><div class="box"><h1>金蝶云星空助手启动失败</h1>
 <pre>${escapeHtml(message)}</pre>
 <p>Log: ${escapeHtml(logDir())}/dsh-server.log</p></div></body></html>`;
   mainWindow.loadURL('data:text/html;charset=utf-8,' + encodeURIComponent(html));
@@ -249,14 +249,14 @@ function startServer() {
 
   serverProc.on('error', (err) => {
     logLine('error', String(err && err.stack ? err.stack : err));
-    showError(`Failed to launch DeepSeek Harness:\n${err.message}`);
+    showError(`金蝶云星空助手启动失败:\n${err.message}`);
   });
 
   serverProc.on('exit', (code, signal) => {
     logLine('exit', `code=${code} signal=${signal}`);
     serverProc = null;
     if (app.isQuitting || app.isRestarting) return;
-    showError(`DeepSeek Harness exited unexpectedly (code ${code}${signal ? `, signal ${signal}` : ''}).`);
+    showError(`金蝶云星空助手意外退出 (code ${code}${signal ? `, signal ${signal}` : ''}).`);
   });
 }
 
@@ -289,7 +289,7 @@ function createWindow() {
     height: 860,
     minWidth: 800,
     minHeight: 600,
-    title: 'DeepSeek Harness',
+    title: '金蝶云星空助手',
     show: false,
     backgroundColor: '#0e1117',
     webPreferences: {
