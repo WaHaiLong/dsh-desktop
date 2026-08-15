@@ -17,10 +17,12 @@ jobs:
         include:
           - os: macos-latest
             target: --mac
-            paths: "dist/*.dmg dist/*.zip dist/latest-mac.yml dist/*.blockmap"
+            paths: "dist/*.dmg dist/*.zip dist/latest*.yml dist/*.blockmap"
+          # Linux 的 AppImage 把 blockmap 内嵌,不生成独立 .blockmap 文件,
+          # 不能放在 upload glob 里(匹配不到会报 "no matches found")。
           - os: ubuntu-latest
             target: --linux
-            paths: "dist/*.AppImage dist/*.deb dist/latest-linux.yml dist/*.blockmap"
+            paths: "dist/*.AppImage dist/*.deb dist/latest*.yml"
           # Windows 必须 store(不压缩):7za 压 800MB 要 1 小时+日志崩溃(Invalid string length),
           # mac 用系统原生 zip 所以快。运行时已由 runtime:pack 打成单个 tar.gz,
           # 安装包只复制/归档这一个文件,Windows 打包从 30 分钟降到几分钟。
@@ -77,6 +79,7 @@ jobs:
             || { echo "release create failed"; exit 1; }
           fi
           # --clobber 覆盖同名资产,重复运行幂等
+          shopt -s nullglob
           gh release upload "$TAG" ${{ matrix.paths }} --clobber
 
   # Windows NSIS 安装版:单独 job,独立发布,不阻塞任何人。
@@ -127,5 +130,6 @@ jobs:
             || gh release view "$TAG" >/dev/null 2>&1 \
             || { echo "release create failed"; exit 1; }
           fi
-          # 更新清单 latest.yml + blockmap 一并上传,electron-updater 靠它发现新版本。
-          gh release upload "$TAG" dist/*.exe dist/latest.yml dist/*.blockmap --clobber
+          # 更新清单 latest*.yml + blockmap 一并上传,electron-updater 靠它发现新版本。
+          shopt -s nullglob
+          gh release upload "$TAG" dist/*.exe dist/latest*.yml dist/*.blockmap --clobber
