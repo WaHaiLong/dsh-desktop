@@ -57,7 +57,7 @@ jobs:
       # ~61min deflating before crashing the logger with "Invalid string length".
       - name: Build Windows ZIP (fast path)
         if: matrix.os == 'windows-latest'
-        run: npx electron-builder --win zip -c.compression=store --publish never
+        run: npx electron-builder --win zip --config.compression=store --publish never
 
       - name: Upload Windows ZIP
         if: matrix.os == 'windows-latest'
