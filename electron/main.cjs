@@ -292,7 +292,12 @@ function createWindow() {
     title: 'DeepSeek Harness',
     show: false,
     backgroundColor: '#0e1117',
-    webPreferences: { contextIsolation: true, nodeIntegration: false, sandbox: true },
+    webPreferences: {
+      contextIsolation: true,
+      nodeIntegration: false,
+      sandbox: true,
+      preload: path.join(__dirname, 'preload-main.cjs'),
+    },
   });
 
   mainWindow.once('ready-to-show', () => mainWindow.show());
@@ -354,6 +359,9 @@ function buildMenu() {
 // ---------------------------------------------------------------------------
 // IPC
 // ---------------------------------------------------------------------------
+
+// 主窗口悬浮齿轮按钮 → 打开金蝶 MCP 设置
+ipcMain.on('main:open-settings', () => openSettings());
 
 ipcMain.handle('kingdee:get-settings', () => loadSettings());
 ipcMain.handle('kingdee:save-settings', (_e, settings) => {
