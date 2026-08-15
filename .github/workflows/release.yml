@@ -24,7 +24,7 @@ jobs:
           # Windows zip 用 store 压缩(纯归档不压缩):800MB 全是预编译二进制,
           # 压无可压,store 只快不亏(几分钟 vs LZMA 1 小时)。
           - os: windows-latest
-            target: --win zip --config.compression=store
+            target: --win zip
             paths: "dist/*.zip"
     runs-on: ${{ matrix.os }}
     env:
@@ -96,7 +96,7 @@ jobs:
         run: npm run fetch:uv
 
       - name: Build NSIS installer
-        run: npx electron-builder --win nsis --config.compression=store --publish never
+        run: npx electron-builder --win nsis --publish never
 
       - name: Publish NSIS exe
         shell: bash

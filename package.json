@@ -47,7 +47,8 @@
     "nsis": {
       "oneClick": false,
       "allowToChangeInstallationDirectory": true,
-      "deleteAppDataOnUninstall": false
+      "deleteAppDataOnUninstall": false,
+      "useZip": true
     },
     "linux": {
       "target": ["AppImage", "deb"],
