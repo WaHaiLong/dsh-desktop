@@ -92,7 +92,7 @@ jobs:
           TAG="v$(node -p 'require("./package.json").version')"
           if ! gh release view "$TAG" >/dev/null 2>&1; then
             gh release create "$TAG" \
-              --title "DeepSeek Harness Desktop $TAG" \
+              --title "金蝶云星空助手 $TAG" \
               --notes "跨平台 · 零依赖 · 下载即用。捆绑独立 Node.js 运行时与 uv,内置金蝶云星空 MCP。官网:https://wahailong.github.io/dsh-desktop" \
               --target main \
             || gh release view "$TAG" >/dev/null 2>&1 \
@@ -144,7 +144,7 @@ jobs:
           TAG="v$(node -p 'require("./package.json").version')"
           if ! gh release view "$TAG" >/dev/null 2>&1; then
             gh release create "$TAG" \
-              --title "DeepSeek Harness Desktop $TAG" \
+              --title "金蝶云星空助手 $TAG" \
               --notes "跨平台 · 零依赖 · 下载即用。官网:https://wahailong.github.io/dsh-desktop" \
               --target main \
             || gh release view "$TAG" >/dev/null 2>&1 \

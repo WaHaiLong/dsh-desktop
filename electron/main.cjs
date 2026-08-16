@@ -375,6 +375,7 @@ ipcMain.handle('app:get-version', () => app.getVersion());
 ipcMain.handle('app:check-update', async () => {
   if (!app.isPackaged) return '开发模式不检查更新。';
   const result = await checkForUpdate();
+  if (result === UPDATE_CHECK_IN_FLIGHT) return '正在检查更新,请稍候…';
   if (result == null) return '检查失败,请稍后重试或查看日志。';
   if (result.isUpdateAvailable) {
     return `发现新版本 v${result.updateInfo && result.updateInfo.version},正在后台下载,完成后会提示重启安装。`;
@@ -384,10 +385,15 @@ ipcMain.handle('app:check-update', async () => {
 
 ipcMain.handle('kingdee:get-settings', () => loadSettings());
 ipcMain.handle('kingdee:save-settings', (_e, settings) => {
-  saveSettings(settings);
-  writeKingdeePatch(loadSettings());
-  restartServer();
-  return true;
+  try {
+    saveSettings(settings);
+    writeKingdeePatch(loadSettings());
+    restartServer();
+    return true;
+  } catch (err) {
+    logLine('settings', `save failed: ${err && err.message ? err.message : err}`);
+    return false;
+  }
 });
 ipcMain.handle('kingdee:get-status', () => ({ uvx: findUv() !== 'uv' }));
 
@@ -418,11 +424,13 @@ function setUpdateBadge(show) {
 }
 
 // 手动/定时触发一次更新检查。inFlight 串行化:并发检查有竞态,第二次会误报
-// update-not-available 把已亮的红点清掉。返回检查结果(供设置窗口显示状态)。
+// update-not-available 把已亮的红点清掉。返回检查结果(供设置窗口显示状态);
+// 返回 UPDATE_CHECK_IN_FLIGHT 表示「已在检查中」(让 UI 提示"正在检查"而非"失败")。
+const UPDATE_CHECK_IN_FLIGHT = Symbol('update-check-in-flight');
 let updateCheckInFlight = false;
 async function checkForUpdate() {
   if (!app.isPackaged) return null;
-  if (updateCheckInFlight) return null;
+  if (updateCheckInFlight) return UPDATE_CHECK_IN_FLIGHT;
   updateCheckInFlight = true;
   try {
     const result = await autoUpdater.checkForUpdates();
@@ -464,8 +472,7 @@ function setupAutoUpdater() {
   autoUpdater.on('update-downloaded', async () => {
     logLine('updater', 'update downloaded');
     setUpdateBadge(true); // 下载完成仍亮着,直到用户处理
-    const win = mainWindow && !mainWindow.isDestroyed() ? mainWindow : undefined;
-    const { response } = await dialog.showMessageBox(win, {
+    const opts = {
       type: 'info',
       buttons: ['立即重启安装', '稍后'],
       defaultId: 0,
@@ -473,7 +480,10 @@ function setupAutoUpdater() {
       title: '发现新版本',
       message: '新版本已下载完成,重启即可生效。',
       detail: `当前版本 ${app.getVersion()},是否立即重启安装?`,
-    });
+    };
+    const { response } = mainWindow && !mainWindow.isDestroyed()
+      ? await dialog.showMessageBox(mainWindow, opts)
+      : await dialog.showMessageBox(opts);
     if (response === 0) {
       setTimeout(() => autoUpdater.quitAndInstall(false, true), 500);
     }

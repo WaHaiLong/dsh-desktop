@@ -69,13 +69,15 @@ for (const [relFile, pairs] of PATCHES) {
   let src = readFileSync(file, 'utf8');
   let changed = false;
   for (const [from, to] of pairs) {
-    if (from instanceof RegExp) {
-      if (!from.test(src)) { console.warn(`[patch-runtime] not found: ${relFile} ~ ${from}`); skipped++; continue; }
-      src = src.replace(from, to);
-    } else {
-      if (!src.includes(from)) { console.warn(`[patch-runtime] not found: ${relFile} ~ "${from}"`); skipped++; continue; }
-      src = src.split(from).join(to);
+    const next = from instanceof RegExp
+      ? src.replace(from, to)
+      : src.split(from).join(to);
+    if (next === src) {
+      console.warn(`[patch-runtime] not found: ${relFile} ~ ${from instanceof RegExp ? from : `"${from}"`}`);
+      skipped++;
+      continue;
     }
+    src = next;
     changed = true;
     patched++;
   }
