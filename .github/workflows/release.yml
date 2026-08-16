@@ -73,12 +73,15 @@ jobs:
         run: npm run fetch:uv
 
       - name: Build
+        # bash 语法(if [ ... ]),Windows runner 默认 PowerShell,必须显式指定 bash。
+        shell: bash
         run: |
           ARGS="${{ matrix.target }} --publish never"
-          # mac 且已配证书(CSC_LINK)时,顺带启用 Apple 公证(先签名后公证)。
-          # 未配置凭据时保持不签名不公证,与现状一致。
+          # mac 且已配证书(CSC_LINK)时,才开签名:hardenedRuntime + entitlements
+          # 是公证必需,但未签名时开了会导致 electron-builder 捡 runner 自签名
+          # 证书去签而失败。未配置凭据时保持不签名,与现状一致。
           if [ "${{ matrix.macSign == true }}" = "true" ] && [ -n "${{ secrets.CSC_LINK }}" ]; then
-            ARGS="$ARGS --config.mac.notarize=true"
+            ARGS="$ARGS --config.mac.hardenedRuntime=true --config.mac.entitlements=build/entitlements.mac.plist --config.mac.notarize=true"
           fi
           npx electron-builder $ARGS
 
