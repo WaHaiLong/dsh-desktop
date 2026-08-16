@@ -42,7 +42,7 @@
 <section class="section" id="download">
   <div class="container">
     <h2 class="section-title">下载</h2>
-    <p class="section-sub">点一下直接下载对应安装包,下载后安装、打开即用。</p>
+    <p class="section-sub">点一下直接下载对应安装包,下载后安装、打开即用。<span id="latest-ver" style="color:#4d6bfe; font-weight:600;"></span></p>
     <div class="dl-grid">
       <div class="dl-card">
         <div class="os">🍎</div>
@@ -153,5 +153,18 @@
   </div>
 </footer>
 
+<script>
+  // 动态显示当前最新版本号(从 GitHub API 拉取),每次发布无需手动改官网
+  (async () => {
+    const el = document.getElementById('latest-ver');
+    if (!el) return;
+    try {
+      const r = await fetch('https://api.github.com/repos/WaHaiLong/dsh-desktop/releases/latest');
+      if (!r.ok) throw new Error('api');
+      const d = await r.json();
+      el.textContent = '· 当前最新版本 ' + d.tag_name;
+    } catch (_) { el.textContent = ''; } // API 不可用时静默隐藏,不影响下载
+  })();
+</script>
 </body>
 </html>
