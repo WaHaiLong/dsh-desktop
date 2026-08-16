@@ -36,14 +36,10 @@ jobs:
     runs-on: ${{ matrix.os }}
     env:
       # 保持 auto-discovery=false:防止捡到 GitHub runner 自带的自签名证书乱签。
-      # 配了 CSC_LINK(证书)时,electron-builder 会直接用它签名,与 auto-discovery 无关。
+      # 签名凭据(CSC_LINK 等)不在这里预置——secret 为空会设成空字符串,
+      # electron-builder 会把它当证书路径导入,报 "not a file"。见 Build 步骤。
       CSC_IDENTITY_AUTO_DISCOVERY: 'false'
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      CSC_LINK: ${{ secrets.CSC_LINK }}
-      CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
-      APPLE_ID: ${{ secrets.APPLE_ID }}
-      APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
-      APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
     steps:
       - uses: actions/checkout@v4
 
@@ -77,10 +73,14 @@ jobs:
         shell: bash
         run: |
           ARGS="${{ matrix.target }} --publish never"
-          # mac 且已配证书(CSC_LINK)时,才开签名:hardenedRuntime + entitlements
-          # 是公证必需,但未签名时开了会导致 electron-builder 捡 runner 自签名
-          # 证书去签而失败。未配置凭据时保持不签名,与现状一致。
+          # mac 且已配证书(CSC_LINK)时:在进程内设置签名/公证凭据,并开启
+          # hardenedRuntime + entitlements(公证必需)。未配置时保持不签名,与现状一致。
           if [ "${{ matrix.macSign == true }}" = "true" ] && [ -n "${{ secrets.CSC_LINK }}" ]; then
+            export CSC_LINK="${{ secrets.CSC_LINK }}"
+            export CSC_KEY_PASSWORD="${{ secrets.CSC_KEY_PASSWORD }}"
+            export APPLE_ID="${{ secrets.APPLE_ID }}"
+            export APPLE_APP_SPECIFIC_PASSWORD="${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}"
+            export APPLE_TEAM_ID="${{ secrets.APPLE_TEAM_ID }}"
             ARGS="$ARGS --config.mac.hardenedRuntime=true --config.mac.entitlements=build/entitlements.mac.plist --config.mac.notarize=true"
           fi
           npx electron-builder $ARGS
