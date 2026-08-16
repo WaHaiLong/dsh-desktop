@@ -76,6 +76,20 @@
       </div>
     </div>
     <p class="dl-tip">全部历史版本见 <a href="https://github.com/WaHaiLong/dsh-desktop/releases" target="_blank">GitHub Releases</a>。</p>
+
+    <div class="dl-tip" style="margin-top:16px; text-align:left;">
+      <details>
+        <summary style="cursor:pointer; font-weight:600;">📖 遇到系统提示「无法验证开发者 / 已损坏 / 未知发布者」怎么办？</summary>
+        <div style="margin-top:10px; line-height:1.9; color:#c9d1d9;">
+          <p>当前为免费版，应用暂未购买代码签名证书，因此 macOS / Windows 首次打开会弹出系统警告。这并非病毒，按下面操作即可正常使用：</p>
+          <p><b>🍎 macOS</b> — 提示「已损坏，无法打开」或「无法验证开发者」：</p>
+          <pre style="background:#161b22; border:1px solid #2d333b; border-radius:8px; padding:10px 12px; font-size:13px; overflow-x:auto;">xattr -cr "/Applications/DeepSeek Harness.app"</pre>
+          <p style="margin-top:6px;">或：<b>右键 App → 打开 → 仍要打开</b>（先把 App 拖进「应用程序」再操作）。</p>
+          <p><b>🪟 Windows</b> — 提示「Windows 已保护你的电脑」：点击 <b>「更多信息」→「仍要运行」</b>。</p>
+          <p style="color:#8b949e;">正式版上线后会完成代码签名，届时不会再出现这些提示。</p>
+        </div>
+      </details>
+    </div>
   </div>
 </section>
 
