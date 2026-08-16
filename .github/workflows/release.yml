@@ -17,11 +17,13 @@ jobs:
         include:
           - os: macos-latest
             target: --mac
+            macSign: true
             paths: "dist/*.dmg dist/*.zip dist/latest*.yml dist/*.blockmap"
           # Linux 的 AppImage 把 blockmap 内嵌,不生成独立 .blockmap 文件,
           # 不能放在 upload glob 里(匹配不到会报 "no matches found")。
           - os: ubuntu-latest
             target: --linux
+            macSign: false
             paths: "dist/*.AppImage dist/*.deb dist/latest*.yml"
           # Windows 必须 store(不压缩):7za 压 800MB 要 1 小时+日志崩溃(Invalid string length),
           # mac 用系统原生 zip 所以快。运行时已由 runtime:pack 打成单个 tar.gz,
@@ -29,11 +31,18 @@ jobs:
           # latest.yml 由 nsis job 上传(exe 版清单);zip job 不传,避免互相覆盖。
           - os: windows-latest
             target: --win zip --config.compression=store
+            macSign: false
             paths: "dist/*.zip"
     runs-on: ${{ matrix.os }}
     env:
-      CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+      # 只有 mac 且配了证书(CSC_LINK)才签名;未配置时保持不签名,与现状一致。
+      CSC_IDENTITY_AUTO_DISCOVERY: ${{ matrix.macSign == true }}
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      CSC_LINK: ${{ secrets.CSC_LINK }}
+      CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
+      APPLE_ID: ${{ secrets.APPLE_ID }}
+      APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+      APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
     steps:
       - uses: actions/checkout@v4
 
@@ -63,7 +72,14 @@ jobs:
         run: npm run fetch:uv
 
       - name: Build
-        run: npx electron-builder ${{ matrix.target }} --publish never
+        run: |
+          ARGS="${{ matrix.target }} --publish never"
+          # mac 且已配证书(CSC_LINK)时,顺带启用 Apple 公证(先签名后公证)。
+          # 未配置凭据时保持不签名不公证,与现状一致。
+          if [ "${{ matrix.macSign == true }}" = "true" ] && [ -n "${{ secrets.CSC_LINK }}" ]; then
+            ARGS="$ARGS --config.mac.notarize=true"
+          fi
+          npx electron-builder $ARGS
 
       # 本平台发布:幂等(不存在则建 Release,存在则跳过),并发竞争用重试兜底。
       - name: Publish to release (independent per platform)
