@@ -443,23 +443,40 @@ async function checkForUpdate() {
   }
 }
 
+/** mac 上应用是否具备自动安装能力:必须是 Developer ID 签名(adhoc/未签名会被 Squirrel.Mac 拒绝替换)。 */
+function isMacAutoInstallCapable() {
+  if (process.platform !== 'darwin') return true;
+  try {
+    const r = spawnSync('codesign', ['-dv', process.execPath], { encoding: 'utf8' });
+    const out = `${r.stderr || ''}${r.stdout || ''}`;
+    return /Developer ID Application/.test(out); // 仅 Developer ID 证书可被 Squirrel.Mac 用于自动替换
+  } catch (_) { return false; }
+}
+
 function setupAutoUpdater() {
   if (!app.isPackaged) return; // 开发模式不检查更新,避免本地报错刷屏
 
-  autoUpdater.autoDownload = true;          // 后台静默下载
-  autoUpdater.autoInstallOnAppQuit = true;  // 用户直接退出时兜底安装
+  // mac 未签名时自动安装必失败(下载了也替换不了),干脆不下载,引导去官网。
+  const canAutoInstall = isMacAutoInstallCapable();
+  autoUpdater.autoDownload = canAutoInstall;          // 后台静默下载(仅可自动安装时)
+  autoUpdater.autoInstallOnAppQuit = canAutoInstall;  // 退出时兜底安装(同上)
 
   autoUpdater.on('update-available', (info) => {
     logLine('updater', 'update available');
     setUpdateBadge(true);
-    // 红点亮了但用户不知道在干嘛:同时弹一个系统通知说明「正在后台下载」。
+    // 红点亮了但用户不知道在干嘛:同时弹一个系统通知说明。
     try {
       const ver = info && info.version ? info.version : '新版本';
       if (Notification.isSupported()) {
-        const n = new Notification({
-          title: '发现新版本',
-          body: `有 ${ver} 可用,正在后台下载,下载完成后会提示重启安装。`,
-        });
+        const n = canAutoInstall
+          ? new Notification({
+              title: '发现新版本',
+              body: `有 ${ver} 可用,正在后台下载,下载完成后会提示重启安装。`,
+            })
+          : new Notification({
+              title: '发现新版本',
+              body: `有 ${ver} 可用。当前为未签名版,Mac 无法自动安装,请到官网手动下载。`,
+            });
         n.on('click', () => { if (mainWindow && !mainWindow.isDestroyed()) mainWindow.show(); });
         n.show();
       }
