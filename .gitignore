@@ -7,3 +7,4 @@ dist/
 .DS_Store
 resources/dsh-runtime.tar.gz
 .claude/
+.analytics-snapshots.json

@@ -1,0 +1,125 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>下载量分析 · 金蝶云星空助手</title>
+<link rel="stylesheet" href="assets/style.css">
+<style>
+  :root { color-scheme: dark; }
+  .stat-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 14px; margin: 20px 0; }
+  .stat { background: #151a26; border: 1px solid #232a3a; border-radius: 12px; padding: 16px; }
+  .stat .num { font-size: 28px; font-weight: 700; color: #fff; }
+  .stat .lbl { color: #9aa3b5; font-size: 13px; margin-top: 4px; }
+  .stat .sub { color: #6b7280; font-size: 12px; margin-top: 2px; }
+  .bar-row { display: flex; align-items: center; gap: 10px; margin: 8px 0; font-size: 13px; }
+  .bar-row .plat { width: 70px; color: #9aa3b5; }
+  .bar-row .bar { height: 10px; border-radius: 5px; background: #4d6bfe; min-width: 2px; }
+  .bar-row .cnt { color: #e6edf3; margin-left: auto; }
+  .bar-row .pct { color: #6b7280; width: 44px; text-align: right; }
+  table { width: 100%; border-collapse: collapse; margin-top: 12px; font-size: 13px; }
+  th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid #232a3a; }
+  th { color: #9aa3b5; font-weight: 600; }
+  td.num, th.num { text-align: right; }
+  tr:last-child td { border-bottom: none; }
+  .muted { color: #6b7280; font-size: 12px; margin-top: 16px; }
+</style>
+</head>
+<body>
+
+<nav class="nav">
+  <div class="nav-inner">
+    <a class="brand" href="index.html"><span class="brand-logo">🧭</span> 金蝶云星空助手</a>
+    <div class="nav-links">
+      <a href="index.html">首页</a>
+      <a href="tutorial.html">教程</a>
+      <a href="build-tutorial.html">打包开源教程</a>
+      <a href="tech.html">技术栈</a>
+      <a href="download-analytics.html" class="active">下载分析</a>
+      <a class="btn" href="index.html#download">立即下载</a>
+    </div>
+  </div>
+</nav>
+
+<section class="section">
+  <div class="container">
+    <h2 class="section-title">下载量分析</h2>
+    <p class="section-sub">数据来自 GitHub Releases 各安装包的真实下载次数(累计值)。</p>
+
+    <div id="status" style="color:#9aa3b5; padding:20px 0;">正在加载数据…</div>
+
+    <div id="content" style="display:none;">
+      <div class="stat-grid" id="stats"></div>
+
+      <h3 style="margin-top:28px; font-size:16px;">按平台分布</h3>
+      <div id="platform-bars" style="margin-top:8px;"></div>
+
+      <h3 style="margin-top:28px; font-size:16px;">按版本</h3>
+      <table>
+        <thead><tr><th>版本</th><th class="num">下载</th><th>平台明细</th></tr></thead>
+        <tbody id="version-rows"></tbody>
+      </table>
+    </div>
+
+    <p class="muted" id="note"></p>
+  </div>
+</section>
+
+<script>
+const OWNER = 'WaHaiLong', REPO = 'dsh-desktop';
+const isInstaller = (n) => /\.(exe|zip|dmg|AppImage|deb)$/.test(n);
+const platOf = (n) => n.includes('windows') ? 'Windows' : (n.includes('mac') || n.includes('.dmg')) ? 'macOS' : (n.includes('linux') || n.includes('AppImage') || n.includes('.deb')) ? 'Linux' : '其他';
+const esc = (s) => String(s).replace(/[<>&]/g, (c) => ({ '<':'&lt;', '>':'&gt;', '&':'&amp;' }[c]));
+
+(async () => {
+  const status = document.getElementById('status');
+  const content = document.getElementById('content');
+  const note = document.getElementById('note');
+  try {
+    const r = await fetch(`https://api.github.com/repos/${OWNER}/${REPO}/releases?per_page=100`, { headers: { Accept: 'application/vnd.github+json' } });
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    const releases = await r.json();
+
+    const rows = [], platTotal = {};
+    let grand = 0;
+    for (const rel of releases) {
+      const installers = (rel.assets || []).filter(a => isInstaller(a.name));
+      const total = installers.reduce((s, a) => s + a.download_count, 0);
+      if (total === 0) continue;
+      rows.push({ tag: rel.tag_name, total, assets: installers.map(a => ({ name: a.name, count: a.download_count, plat: platOf(a.name) })) });
+      for (const a of installers) platTotal[platOf(a.name)] = (platTotal[platOf(a.name)] || 0) + a.download_count;
+      grand += total;
+    }
+    rows.sort((a, b) => a.tag < b.tag ? 1 : -1);
+
+    status.style.display = 'none';
+    content.style.display = 'block';
+
+    // 汇总卡片
+    const plats = Object.entries(platTotal).sort((a, b) => b[1] - a[1]);
+    document.getElementById('stats').innerHTML = [
+      ['总下载', grand, '累计'],
+      ...plats.map(([p, n]) => [p, n, grand ? (n / grand * 100).toFixed(1) + '%' : '0%'])
+    ].map(([lbl, num, sub]) => `<div class="stat"><div class="num">${num}</div><div class="lbl">${esc(lbl)}</div><div class="sub">${esc(sub)}</div></div>`).join('');
+
+    // 平台条形
+    document.getElementById('platform-bars').innerHTML = plats.map(([p, n]) => {
+      const pct = grand ? (n / grand * 100) : 0;
+      return `<div class="bar-row"><span class="plat">${esc(p)}</span><div class="bar" style="width:${Math.max(2, pct * 2)}%"></div><span class="cnt">${n}</span><span class="pct">${pct.toFixed(1)}%</span></div>`;
+    }).join('');
+
+    // 版本表
+    document.getElementById('version-rows').innerHTML = rows.map(r => {
+      const detail = r.assets.sort((x, y) => y.count - x.count).map(a => `${a.plat} ${a.count}`).join(' · ');
+      return `<tr><td>${esc(r.tag)}</td><td class="num">${r.total}</td><td>${esc(detail)}</td></tr>`;
+    }).join('');
+
+    note.textContent = `合计 ${grand} 次下载。数据为累计值,不含未统计的下载。`;
+  } catch (e) {
+    status.textContent = '加载失败(可能触发了 GitHub API 限流),请稍后刷新重试。';
+    status.style.color = '#f47067';
+  }
+})();
+</script>
+</body>
+</html>
