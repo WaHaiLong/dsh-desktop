@@ -514,7 +514,9 @@ if (!gotLock) {
   });
 
   app.on('activate', () => {
-    if (BrowserWindow.getAllWindows().length === 0) {
+    // macOS 点 Dock 图标触发;app 就绪前可能被激活,直接建窗口会抛
+    // "Cannot create BrowserWindow before app is ready",需先等 ready。
+    if (app.isReady() && BrowserWindow.getAllWindows().length === 0) {
       createWindow();
       loadApp();
     }
