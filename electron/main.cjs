@@ -539,5 +539,9 @@ if (!gotLock) {
     if (logStream) { try { logStream.end(); } catch (_) { /* ignore */ } }
   });
 
-  app.on('window-all-closed', () => { app.quit(); });
+  app.on('window-all-closed', () => {
+    // macOS 惯例:关窗不退出,留在 Dock;点 Dock 图标经 activate 重新开窗,Cmd+Q 才退出。
+    // Windows/Linux 仍关窗即退出。
+    if (process.platform !== 'darwin') app.quit();
+  });
 }
